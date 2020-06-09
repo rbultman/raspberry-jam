@@ -9,7 +9,7 @@
 CC ?= gcc
 CXX ?= g++
 CXXFLAGS += -I ../src/ -I ./ -DLINUX
-LDFLAGS += -lrt -lpthread
+LDFLAGS += -lrt -lpthread -lecasoundc
 
 ifeq ($(build),debug)
 	CXXFLAGS += -c -g2 -O0 \
@@ -46,7 +46,7 @@ else
 endif
 
 ifeq ($(target),raspberry)
-	CXXFLAGS += -DRASPBERRY
+	CXXFLAGS += -DRASPBERRY -lecasoundc
 	LDFLAGS += -lwiringPi
 endif
 

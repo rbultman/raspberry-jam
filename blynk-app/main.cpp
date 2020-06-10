@@ -545,7 +545,7 @@ BLYNK_WRITE(START_JACK) //Start Jack button
    {
       printf("Start_Jam \r\n");
       KillAllSlots();
-      sprintf(jackCommand,"sh /home/pi/start_jack.sh -r%s &",sampleRate);
+      sprintf(jackCommand,"sh start_jack.sh -r%s &",sampleRate);
       system(jackCommand);
    }
 }

@@ -72,6 +72,6 @@ $(EXECUTABLE): $(OBJECTS)
 
 archive:
 	-rm blynk-rjam.tar.gz
-	tar -cf blynk-rjam.tar main.cpp readUsers.h userSpec.h Makefile readUsers.cpp users.csv
+	tar -cf blynk-rjam.tar main.cpp readUsers.h userSpec.h start_jack.sh Makefile readUsers.cpp users.csv
 	gzip blynk-rjam.tar
 

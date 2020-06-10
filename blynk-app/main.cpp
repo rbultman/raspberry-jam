@@ -1,3 +1,4 @@
+
 /**
  * @file       main.cpp
  * @author     Volodymyr Shymanskyy
@@ -22,7 +23,6 @@
 #include <libecasoundc/ecasoundc.h>
 #include "userSpec.h"
 #include "readUsers.h"
-
 
 // convenience macros
 #define USER1_ROLE V3
@@ -159,6 +159,9 @@ BlynkTimer tmr;
 // function prototypes
 void SetSlotRole(uint8_t slot, uint8_t role);
 int GetCurrentOffset(int slot);
+void KillSlot(int slot);
+void KillAllSlots();
+void OpenSlot(int slot);
 
 static void sleep_millis(int millis)
 {
@@ -227,9 +230,6 @@ BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
 
 void SetLatencyForSlot(uint8_t slot, uint8_t latency)
 {
-   char jacktripCommand[128] = "jacktrip ";
-   int offset = GetCurrentOffset(slot);
-
    if (latency >= BUFFER_SIZES) {
       printf("Buffer size inxex out of range.\r\n");
    } else {
@@ -237,13 +237,8 @@ void SetLatencyForSlot(uint8_t slot, uint8_t latency)
       strcpy(connectionParams[slot].rxBufferSize, rxBufferSize[latency]);
       if (connectionState[slot]) 
       {
-         sprintf(jacktripCommand, "kill `ps aux | grep \"[j]acktrip -o%d\" | awk '{print $2}'`", offset);
-         printf("Kill command: %s\r\n", jacktripCommand);
-         system(jacktripCommand);
-         sleep_millis(250);
-         sprintf(jacktripCommand, "jacktrip -o%d -n1 -z -%s -q%s &", offset, connectionParams[slot].connectionType, connectionParams[slot].rxBufferSize);
-         printf("%s\r\n",jacktripCommand);
-         system(jacktripCommand);
+         KillSlot(slot);
+         OpenSlot(slot);
       }
    }
 }
@@ -269,6 +264,8 @@ void UserSelected(uint8_t user)
    uint8_t slot=0;
 
    printf("The select user is index %d.\r\n", user);
+
+   KillAllSlots();
 
    currentUser = user;
 
@@ -345,6 +342,7 @@ BLYNK_WRITE(ADDRESS_BOOK) //Address Book
 BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
 {
    char jackCommand[128] = "jackd";
+
    printf("New sample rate: %d\r\n", param.asInt());
    switch (param.asInt())
    {
@@ -361,12 +359,7 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
          printf("Unknown item selected \r\n");
    }
    printf("%s \r\n",sampleRate);
-   Blynk.virtualWrite(USER1_CONNECT ,LOW);
-   connectionState[0] = false;
-   Blynk.virtualWrite(USER2_CONNECT,LOW);
-   connectionState[1] = false;
-   Blynk.virtualWrite(USER3_CONNECT,LOW);
-   connectionState[2] = false;
+   KillAllSlots();
    sprintf(jackCommand,"sh /home/pi/start_jack.sh -r%s &",sampleRate);
    system(jackCommand);	
 }
@@ -387,48 +380,66 @@ int GetCurrentOffset(int slot)
    return offset;
 }
 
+void OpenSlot(int slot)
+{
+   char jacktripCommand[128];
+   int offset = GetCurrentOffset(slot);
+
+   Blynk.virtualWrite(ConnectButton[slot] ,HIGH);
+   sprintf(jacktripCommand, "jacktrip -o%d -n1 -z -%s -q%s &", offset, connectionParams[slot].connectionType, connectionParams[slot].rxBufferSize);
+   printf("%s\r\n",jacktripCommand);
+   system(jacktripCommand);
+   connectionState[slot] = true;
+}
+
+void KillSlot(int slot)
+{
+   char killcmd[128];
+   int offset = GetCurrentOffset(slot);
+
+   Blynk.virtualWrite(ConnectButton[slot] ,LOW);
+   //send kill command
+   sprintf(killcmd, "kill `ps aux | grep \"[j]acktrip -o%d\" | awk '{print $2}'`", offset);
+   system(killcmd);
+   connectionState[slot] = false;
+   // sleep a little so the process dies and jackd recovers
+   sleep_millis(250);
+}
+
+void KillAllSlots()
+{
+   int i;
+
+   for(i=0; i<TOTAL_SLOTS; i++)
+   {
+      if (connectionState[i])
+      {
+         KillSlot(i);
+      }
+   }
+}
+
 void DisconnectSlot(void *pSlot)
 {
    uint32_t slot = (uint32_t)pSlot;
-   char buf[128];
-   int offset = GetCurrentOffset(slot);
 
    printf("Disconnecting slot: %d\r\n", slot);
-   sprintf(buf, "kill `ps aux | grep \"[j]acktrip -o%d\" | awk '{print $2}'`", offset);
-   printf("Kill command: %s\r\n", buf);
-   system(buf);
-   sleep_millis(250);
-   Blynk.virtualWrite(ConnectButton[slot] ,LOW);
-   connectionState[slot] = false;
+   KillSlot(slot);
    printf("Slot %d disconnected\r\n", slot+1);
 }
 
 void ConnectSlot(int slot, int pressed)
 {
-   char jacktripCommand[128];
-   int offset = GetCurrentOffset(slot);
-
    if (pressed)
    {
-      char msgbuf[128];
-      // send kill command
-      sprintf(msgbuf, "kill `ps aux | grep \"[j]acktrip -o%d\" | awk '{print $2}'`", offset);
-	  printf("%s\r\n",msgbuf);
-      system(msgbuf);
-      // sleep a little so the process dies and jackd recovers
-      sleep_millis(250);
-      // (re)start the connection
-      sprintf(jacktripCommand, "jacktrip -o%d -n1 -z -%s -q%s &", offset, connectionParams[slot].connectionType, connectionParams[slot].rxBufferSize);
-      printf("Jacktrip command: %s\r\n",jacktripCommand);
-      system(jacktripCommand);
-	  longPressTimer = tmr.setTimeout(2000, DisconnectSlot, (void *)slot);
+      KillSlot(slot);
+      OpenSlot(slot);
+      longPressTimer = tmr.setTimeout(2000, DisconnectSlot, (void *)slot);
    }
    else
    {	
       tmr.deleteTimer(longPressTimer);
    }
-   Blynk.virtualWrite(ConnectButton[slot] ,HIGH);
-   connectionState[slot] = true;
 }
 
 BLYNK_WRITE(USER1_CONNECT ) //Connection 1 Connect button
@@ -486,11 +497,17 @@ BLYNK_WRITE(USER3_IPADDR) //Connection 3 Client IP
 
 void SetSlotRole(uint8_t slot, uint8_t role)
 {
+   bool restartNeeded = false;
+
    printf("New role for slot %d: %d\n", slot, role);
+   if (connectionState[slot])
+   {
+      KillSlot(slot);
+      restartNeeded = true;
+   }
    if (role == 1)
    {
       sprintf(connectionParams[slot].connectionType,"c%s", connectionParams[slot].clientIP);
-	  
    }
    else
    {
@@ -499,6 +516,10 @@ void SetSlotRole(uint8_t slot, uint8_t role)
    }
    connectionParams[slot].role = role;
    printf("Slot %d connection type is now: %s\r\n", slot, connectionParams[slot].connectionType);
+   if (restartNeeded)
+   {
+      OpenSlot(slot);
+   }
 }
 
 BLYNK_WRITE(USER1_ROLE) //Connection 1 Connection Type
@@ -519,15 +540,11 @@ BLYNK_WRITE(USER3_ROLE) //Connection 3 Connection Type
 BLYNK_WRITE(START_JACK) //Start Jack button
 {
    char jackCommand[128] = "jackd";
+
    if (param[0])
    {
       printf("Start_Jam \r\n");
-      Blynk.virtualWrite(USER1_CONNECT ,LOW);
-      connectionState[0] = false;
-      Blynk.virtualWrite(USER2_CONNECT,LOW);
-      connectionState[1] = false;
-      Blynk.virtualWrite(USER3_CONNECT,LOW);
-      connectionState[2] = false;
+      KillAllSlots();
       sprintf(jackCommand,"sh /home/pi/start_jack.sh -r%s &",sampleRate);
       system(jackCommand);
    }
@@ -795,6 +812,7 @@ BLYNK_WRITE(MONITOR_GAIN_SLIDER)  // Monitor Gain slider
 		SetGainFromSlider(param[0].asInt());
 	}
 }
+
 
 void setup()
 {

@@ -217,6 +217,7 @@ BLYNK_CONNECTED() {
    }
 
    Blynk.virtualWrite(ROUTING, LOW);
+   Blynk.syncVirtual(ROUTING);
 }
 
 BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
@@ -743,7 +744,6 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 			EcaConnect(i);
 			
 		}
-
 
 		sprintf(ecaCommand,"c-select %s",connectedSlots);  //Select the chains for all connected slots
 		eci_command(ecaCommand);

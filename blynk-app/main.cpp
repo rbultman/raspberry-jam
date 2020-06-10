@@ -116,7 +116,7 @@ char connectedSlots[64];
 int micGainIndex =0;
 bool audioInjector = false;
 bool connectionState[TOTAL_SLOTS] = {false, false, false};
-bool enableVolume[TOTAL_SLOTS + 1] = {false, false, false, false};
+bool enableVolume[TOTAL_USERS] = {false, false, false, false};
 int currentUser = 1;
 
 int longPressMillis = 2000;    // time in millis needed for longpress
@@ -196,20 +196,27 @@ int checkIpFormat(const char *ip) {
 }
 
 BLYNK_CONNECTED() {
+   int i;
+
    Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
    Blynk.syncVirtual(INPUT_LEVEL); //sync input level on connection
    Blynk.syncVirtual(OUTPUT_LEVEL); //sync output level on connection
    Blynk.syncVirtual(USER1_IPADDR); //sync Client 1 IP
-   //	Blynk.syncVirtual(USER2_IPADDR); //sync Client 2 IP
-   //	Blynk.syncVirtual(USER3_IPADDR); //sync Client 3 IP
+   Blynk.syncVirtual(USER2_IPADDR); //sync Client 2 IP
+   Blynk.syncVirtual(USER3_IPADDR); //sync Client 3 IP
    Blynk.syncVirtual(SOUNDCARD); //sync Soundcard selection
    Blynk.syncVirtual(INPUT_SELECT); //sync Input selection
-   //Blynk.syncVirtual(ADDRESS_BOOK); 
 
    // initialize menu items
-   //Blynk.setProperty(ADDRESS_BOOK, "labels", "Menu Item 1", "Menu Item 2", "Menu Item 3");
    Blynk.setProperty(ADDRESS_BOOK, "labels", "New Session", users[0].name, users[1].name, users[2].name, users[3].name);
    Blynk.syncVirtual(ADDRESS_BOOK); 
+
+   // set connection states to off
+   for (i=0; i<TOTAL_SLOTS; i++) {
+      Blynk.virtualWrite(ConnectButton[i], LOW);
+   }
+
+   Blynk.virtualWrite(ROUTING, LOW);
 }
 
 BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
@@ -398,6 +405,7 @@ void KillSlot(int slot)
    int offset = GetCurrentOffset(slot);
 
    Blynk.virtualWrite(ConnectButton[slot] ,LOW);
+   enableVolume[slot] = false;
    //send kill command
    sprintf(killcmd, "kill `ps aux | grep \"[j]acktrip -o%d\" | awk '{print $2}'`", offset);
    system(killcmd);
@@ -545,7 +553,7 @@ BLYNK_WRITE(START_JACK) //Start Jack button
    {
       printf("Start_Jam \r\n");
       KillAllSlots();
-      sprintf(jackCommand,"sh /home/pi/start_jack.sh -r%s &",sampleRate);
+      sprintf(jackCommand,"sh start_jack.sh -r%s &",sampleRate);
       system(jackCommand);
    }
 }

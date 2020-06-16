@@ -70,8 +70,8 @@ $(EXECUTABLE): $(OBJECTS)
 .cpp.o:
 	$(CXX) $(CXXFLAGS) $< -o $@
 
+ARCHIVE_NAME=$(shell echo blynk-rjam_`date +%Y.%m.%d-%H%M%S`.tar)
 archive:
-	-rm blynk-rjam.tar.gz
-	tar -cf blynk-rjam.tar main.cpp readUsers.h userSpec.h start_jack.sh Makefile readUsers.cpp users.csv
-	gzip blynk-rjam.tar
+	tar -cf $(ARCHIVE_NAME) main.cpp readUsers.h userSpec.h start_jack.sh Makefile readUsers.cpp users.csv
+	gzip $(ARCHIVE_NAME)
 

@@ -216,6 +216,10 @@ BLYNK_CONNECTED() {
       Blynk.virtualWrite(ConnectButton[i], LOW);
    }
 
+   Blynk.virtualWrite(SLOT0_GAIN_SLIDER, 0);
+   Blynk.virtualWrite(SLOT1_GAIN_SLIDER, 0);
+   Blynk.virtualWrite(SLOT2_GAIN_SLIDER, 0);
+   Blynk.virtualWrite(MONITOR_GAIN_SLIDER, 0);
    Blynk.virtualWrite(ROUTING, LOW);
    Blynk.syncVirtual(ROUTING);
 }
@@ -684,11 +688,25 @@ void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input
 			sprintf(ecaCommand,"jack_disconnect system:playback_1 %s:receive_1",connectionParams[slot].clientIP); //Disconnect jacktrip from system playback since connection is now to Ecasound
 			system(ecaCommand);			
 		}
-		eci_command("cop-add -eadb:-12");  // add gain chain operator
+		eci_command("cop-add -eadb:0");  // add gain chain operator
 		sprintf(ecaCommand,"slot%d,",slot);
 		strcat(connectedSlots,ecaCommand);  //For each slot that is 'connected' add slot to connected slots
 		enableVolume[slot] = true;
-		
+		switch (slot)
+		{
+		case 0:
+			Blynk.virtualWrite(SLOT0_GAIN_SLIDER, 0);
+			break;
+		case 1:
+			Blynk.virtualWrite(SLOT1_GAIN_SLIDER, 0);
+			break;
+		case 2:
+			Blynk.virtualWrite(SLOT2_GAIN_SLIDER, 0);
+			break;
+		default:
+			break;
+		}
+
 	}
 }
 
@@ -710,13 +728,14 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 		sprintf(ecaCommand,"cs-set-audio-format 32,1,%s",sampleRate);  //Set audio format, 32 bit, 1 channel, samplerate
 		eci_command(ecaCommand);
 		eci_command("ai-add jack,system");  //Add input to the chain from jack,system
-		eci_command("cop-add -eadb:-12");   //Add gain control to the chain
+		eci_command("cop-add -eadb:0");   //Add gain control to the chain
 		//eci_command("ao-add loop,1");
 		
 		eci_command("cs-status");  //Get the chainsetup status
 		printf("Chain operator status: %s\n", eci_last_string());
 
 		enableVolume[3] = true;
+		Blynk.virtualWrite(MONITOR_GAIN_SLIDER, 0);
 	
 		eci_command("c-add outL");  //Add a chain for main out left
 		eci_command("c-select outL");
@@ -768,7 +787,7 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 		eci_command("cop-status");
 		printf("Chain operator status: %s", eci_last_string());
 		eci_command("cs-remove");
-		for (i=0; i<TOTAL_SLOTS; i++)   //Disable the gain control for all slots since Ecasound is stopped
+		for (i=0; i<TOTAL_USERS; i++)   //Disable the gain control for all slots since Ecasound is stopped
 			{
 				enableVolume[i] = false;
 			}
@@ -785,40 +804,57 @@ void SetGainFromSlider(int gain)   //Get gain from the slider widget, apply to t
 
 BLYNK_WRITE(SLOT0_GAIN_SLIDER)  // slot0 Gain slider
 {
-	eci_command("c-select slot0");
+
 	if (enableVolume[0])  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
 	{
+		eci_command("c-select slot0");
 		SetGainFromSlider(param[0].asInt());
+	}
+	else
+	{
+		Blynk.virtualWrite(SLOT0_GAIN_SLIDER, 0);
 	}
 }
 
 
 BLYNK_WRITE(SLOT1_GAIN_SLIDER)  // slot1 Gain slider
 {
-	eci_command("c-select slot1");
 	if (enableVolume[1]) //Check to make sure the slot is connected/routed otherwise gain control should be ignored
 	{	
+		eci_command("c-select slot1");
 		SetGainFromSlider(param[0].asInt());
 	}
+	else
+	{
+		Blynk.virtualWrite(SLOT1_GAIN_SLIDER, 0);
+	}	
 }
 
 
 BLYNK_WRITE(SLOT2_GAIN_SLIDER)  // slot2 Gain slider
 {
-	eci_command("c-select slot2");
 	if (enableVolume[2])  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
 	{	
+		eci_command("c-select slot2");
 		SetGainFromSlider(param[0].asInt());
 	}
+	else
+	{
+		Blynk.virtualWrite(SLOT2_GAIN_SLIDER, 0);
+	}	
 }
 
 BLYNK_WRITE(MONITOR_GAIN_SLIDER)  // Monitor Gain slider
 {
-	eci_command("c-select self");
 	if (enableVolume[3])  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
 	{
+		eci_command("c-select self");
 		SetGainFromSlider(param[0].asInt());
 	}
+	else
+	{
+		Blynk.virtualWrite(MONITOR_GAIN_SLIDER, 0);
+	}	
 }
 
 

@@ -787,7 +787,7 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 		eci_command("cop-status");
 		printf("Chain operator status: %s", eci_last_string());
 		eci_command("cs-remove");
-		for (i=0; i<5; i++)   //Disable the gain control for all slots since Ecasound is stopped
+		for (i=0; i<TOTAL_USERS; i++)   //Disable the gain control for all slots since Ecasound is stopped
 			{
 				enableVolume[i] = false;
 			}

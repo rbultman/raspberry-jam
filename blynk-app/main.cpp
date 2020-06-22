@@ -372,7 +372,7 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
    }
    printf("%s \r\n",sampleRate);
    KillAllSlots();
-   sprintf(jackCommand,"sh /home/pi/start_jack.sh -r%s &",sampleRate);
+   sprintf(jackCommand,"sh start_jack.sh -r%s &",sampleRate);
    system(jackCommand);	
 }
 

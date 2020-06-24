@@ -575,6 +575,8 @@ BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
          sprintf(mixCaptureCommand,"'Capture'");
          sprintf(micGainCommand,"amixer set 'Mic Boost' ");
          audioInjector=true;
+		 system("sudo rm /boot/soundcard.txt");
+		 system("sudo bash -c \"echo 'dtoverlay=audioinjector-wm8731-audio' >> /boot/soundcard.txt\"");
          break;
       case 2: // Fe-Pi
          audioInjector=false;
@@ -586,8 +588,13 @@ BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
          sprintf(mixMasterCommand,"'PCM'");
          sprintf(mixCaptureCommand,"'Capture'");
          sprintf(micGainCommand,"amixer set 'Mic' ");
+		 system("sudo rm /boot/soundcard.txt");
+		 system("sudo bash -c \"echo 'dtoverlay=fe-pi-audio' >> /boot/soundcard.txt\"");
+		 
          break;
       case 3: // Hifiberry DAC +ADC
+		 system("sudo rm /boot/soundcard.txt");
+		 system("sudo bash -c \"echo 'dtoverlay=hifiberry-dacplusadc' >> /boot/soundcard.txt\"");
 
          break;
       default:

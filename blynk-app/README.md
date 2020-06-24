@@ -1,7 +1,22 @@
 ### Blynk App
-This program runs on a Raspberry Pi and can be used to control a jam session.
+This program runs on a Raspberry Pi and can be used to control a jam session via a [Blynk](https://blynk.io/) app.  This program connects to the Blynk server
 
-Details to come...
+You will either need to use ssh to connect to your headless pi or use a keyboard and monitor directy connected to it in order to use the Blynk app.
+
+### Installing
+First, install the Blynk library on the pi. This can be done either using git or wget on the pi.  
+
+Using git:
+```
+git clone https://github.com/blynkkk/blynk-library
+cd blynk-library/linux
+```
+Using wget:
+```
+wget https://github.com/blynkkk/blynk-library/archive/master.zip
+unzip master.zip
+cd blynk-library-master/linux
+```
 
 ### Building
 - Download the Blynk libraries

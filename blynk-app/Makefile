@@ -8,7 +8,7 @@
 
 CC ?= gcc
 CXX ?= g++
-CXXFLAGS += -I ../src/ -I ./ -DLINUX
+CXXFLAGS += -I blynk-library/src/ -I blynk-library/linux/ -DLINUX
 LDFLAGS += -lrt -lpthread -lecasoundc
 
 ifeq ($(build),debug)
@@ -52,9 +52,9 @@ endif
 
 SOURCES=main.cpp \
 	readUsers.cpp \
-	../src/utility/BlynkDebug.cpp \
-	../src/utility/BlynkHandlers.cpp \
-	../src/utility/BlynkTimer.cpp
+	blynk-library/src/utility/BlynkDebug.cpp \
+	blynk-library/src/utility/BlynkHandlers.cpp \
+	blynk-library/src/utility/BlynkTimer.cpp
 
 OBJECTS=$(SOURCES:.cpp=.o)
 EXECUTABLE=blynk
@@ -72,6 +72,6 @@ $(EXECUTABLE): $(OBJECTS)
 
 ARCHIVE_NAME=$(shell echo blynk-rjam_`date +%Y.%m.%d-%H%M%S`.tar)
 archive:
-	tar -cf $(ARCHIVE_NAME) main.cpp readUsers.h userSpec.h start_jack.sh Makefile readUsers.cpp users.csv
+	tar -cf $(ARCHIVE_NAME) main.cpp readUsers.h userSpec.h start_jack.sh Makefile readUsers.cpp
 	gzip $(ARCHIVE_NAME)
 

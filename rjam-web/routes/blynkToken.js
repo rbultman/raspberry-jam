@@ -1,9 +1,10 @@
 var fs = require("fs");
+const filename = "../settings/blynk-token.txt"
 
 function get() {
   var token = "";
   try {
-    var b = fs.readFileSync('blynk-token.txt');
+    var b = fs.readFileSync(filename);
     token = b.toString();
   } catch(err) {
     console.log("Error reading the token from the file: " + err);
@@ -13,7 +14,7 @@ function get() {
 }
 
 function set(t) {
-  fs.open('blynk-token.txt', "w", (err, fd) => {
+  fs.open(filename, "w", (err, fd) => {
     if (err) {
       console.log("Error opening token file for writing: " + err);
     } else {

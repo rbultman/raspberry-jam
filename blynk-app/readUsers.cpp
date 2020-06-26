@@ -4,7 +4,7 @@
 #include "userSpec.h"
 #include "readUsers.h"
 
-#define USER_FILE_NAME "users.csv"
+#define USER_FILE_NAME "../settings/users.csv"
 
 static char * strip(char *p)
 {

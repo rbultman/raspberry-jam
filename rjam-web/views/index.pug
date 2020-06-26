@@ -1,0 +1,21 @@
+extends layout
+
+block content
+  form(action="." method="POST")
+    div(class="form-group")
+      h1="Welcome to the Raspberry Jam Configurator"
+
+    div(class="form-group")
+      p(class="lead")="Enter your Blynk token below and click 'Submit'"
+
+    div(class="form-group")
+      label(for="blynkToken") Blynk Token
+      input(
+        type="text"
+        id="blynkToken"
+        name="blynkToken"
+        value=blynkToken
+        class="form-control"
+      )
+
+    input(class="btn btn-primary" type="submit" value="Submit")

@@ -24,77 +24,83 @@
 #include "userSpec.h"
 #include "readUsers.h"
 
-// convenience macros
-#define USER1_ROLE V3
-#define USER1_IPADDR V2
-#define USER1_LATENCY V5
-#define USER1_CONNECT V6 
-
-#define USER2_ROLE V8
-#define USER2_IPADDR V9
-#define USER2_LATENCY V10
-#define USER2_CONNECT V11
-
-#define USER3_ROLE V12
-#define USER3_IPADDR V13
-#define USER3_LATENCY V14
-#define USER3_CONNECT V15
-
-#define SLOT0_GAIN_SLIDER V22
-#define SLOT1_GAIN_SLIDER V24
-#define SLOT2_GAIN_SLIDER V25
-#define MONITOR_GAIN_SLIDER V26
-
-#define ADDRESS_BOOK V16
-#define SAMPLE_RATE V7
-#define START_JACK V4
-#define ROUTING V18
-#define INPUT_LEVEL V17
-#define OUTPUT_LEVEL V1
-#define SOUNDCARD V19
-#define INPUT_SELECT V20
-#define MIC_GAIN V21
-
 #define TOTAL_SLOTS 3
 
-int ConnectButton[TOTAL_SLOTS] = {
-   USER1_CONNECT,
-   USER2_CONNECT,
-   USER3_CONNECT,
+// define the controls
+#define SLOT1_EDIT_BUTTON     V28
+#define SLOT1_ROLE_BUTTON     V3
+#define SLOT1_LATENCY         V5
+#define SLOT1_GAIN_SLIDER     V22
+#define SLOT1_START_BUTTON    V6
+
+#define SLOT2_EDIT_BUTTON     V31
+#define SLOT2_ROLE_BUTTON     V8
+#define SLOT2_LATENCY V9
+#define SLOT2_GAIN_SLIDER     V24
+#define SLOT2_START_BUTTON    V11
+
+#define SLOT3_EDIT_BUTTON     V32
+#define SLOT3_ROLE_BUTTON     V12
+#define SLOT3_LATENCY V14
+#define SLOT3_GAIN_SLIDER     V25
+#define SLOT3_START_BUTTON    V15
+
+#define LEFT_EDIT_FIELD_TEXT_BOX  V27
+#define RIGHT_EDIT_FIELD_TEXT_BOX V29
+#define SESSION_DROP_DOWN         V16
+#define SESSION_SAVE_BUTTON       V30
+#define ROUTING                   V18
+#define SAMPLE_RATE               V7
+#define MONITOR_GAIN_SLIDER       V26
+#define INPUT_LEVEL               V17
+#define OUTPUT_LEVEL              V1
+#define SOUNDCARD                 V19
+#define INPUT_SELECT              V20
+#define MIC_GAIN                  V21
+
+int connectButton[TOTAL_SLOTS] = {
+   SLOT1_START_BUTTON,
+   SLOT2_START_BUTTON,
+   SLOT3_START_BUTTON,
 };
 
 int roleButton[TOTAL_SLOTS] = {
-   USER1_ROLE,
-   USER2_ROLE,
-   USER3_ROLE,
+   SLOT1_ROLE_BUTTON,
+   SLOT2_ROLE_BUTTON,
+   SLOT3_ROLE_BUTTON,
 };
 
-int ipAddrBox[TOTAL_SLOTS] = {
-   USER1_IPADDR,
-   USER2_IPADDR,
-   USER3_IPADDR,
+int editButton[TOTAL_SLOTS] = {
+   SLOT1_EDIT_BUTTON,
+   SLOT2_EDIT_BUTTON,
+   SLOT3_EDIT_BUTTON,
 };
 
 int latencySlider[TOTAL_SLOTS] = {
-   USER1_LATENCY, 
-   USER2_LATENCY, 
-   USER3_LATENCY, 
+   SLOT1_LATENCY,
+   SLOT2_LATENCY,
+   SLOT3_LATENCY,
 };
 
-#define TOTAL_USERS 4
-UserRecord_T users[TOTAL_USERS] = {
-   {"User1", "127.0.0.1"},
-   {"User2", "127.0.0.2"},
-   {"User3", "127.0.0.3"},
-   {"User4", "127.0.0.4"},
+int gainSlider[TOTAL_SLOTS] = {
+   SLOT1_GAIN_SLIDER,
+   SLOT2_GAIN_SLIDER,
+   SLOT3_GAIN_SLIDER,
 };
 
-static const uint8_t defaultRoles[TOTAL_USERS][TOTAL_SLOTS] = {
+UserRecord_T users[TOTAL_SLOTS] = {
+   {"User1", "127.0.0.1", "10"},
+   {"User2", "127.0.0.2", "10"},
+   {"User3", "127.0.0.3", "10"},
+};
+
+static const uint8_t defaultRoles[TOTAL_SLOTS][TOTAL_SLOTS] = {
    {0, 0, 0},
    {1, 0, 0},
    {1, 1, 0},
-   {1, 1, 1}
 };
+
+int slotBeingEdited = -1;
 
 static BlynkTransportSocket _blynkTransport;
 BlynkSocket Blynk(_blynkTransport);
@@ -116,8 +122,8 @@ char connectedSlots[64];
 int micGainIndex =0;
 bool audioInjector = false;
 bool connectionState[TOTAL_SLOTS] = {false, false, false};
-bool enableVolume[TOTAL_USERS] = {false, false, false, false};
-int currentUser = 1;
+bool enableVolume[TOTAL_SLOTS] = {false, false, false};
+bool myVolumeIsEnabled = false;
 
 int longPressMillis = 2000;    // time in millis needed for longpress
 int longPressTimer;
@@ -201,24 +207,25 @@ BLYNK_CONNECTED() {
    Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
    Blynk.syncVirtual(INPUT_LEVEL); //sync input level on connection
    Blynk.syncVirtual(OUTPUT_LEVEL); //sync output level on connection
-   Blynk.syncVirtual(USER1_IPADDR); //sync Client 1 IP
-   Blynk.syncVirtual(USER2_IPADDR); //sync Client 2 IP
-   Blynk.syncVirtual(USER3_IPADDR); //sync Client 3 IP
    Blynk.syncVirtual(SOUNDCARD); //sync Soundcard selection
    Blynk.syncVirtual(INPUT_SELECT); //sync Input selection
 
+   for (i=0; i<TOTAL_SLOTS; i++) {
+      Blynk.syncVirtual(roleButton[i]); //sync Client 1 IP
+   }
+
    // initialize menu items
-   Blynk.setProperty(ADDRESS_BOOK, "labels", "New Session", users[0].name, users[1].name, users[2].name, users[3].name);
-   Blynk.syncVirtual(ADDRESS_BOOK); 
+   Blynk.setProperty(SESSION_DROP_DOWN, "labels", "New Session", users[0].name, users[1].name, users[2].name);
+   Blynk.syncVirtual(SESSION_DROP_DOWN); 
 
    // set connection states to off
    for (i=0; i<TOTAL_SLOTS; i++) {
-      Blynk.virtualWrite(ConnectButton[i], LOW);
+      Blynk.virtualWrite(connectButton[i], LOW);
    }
 
-   Blynk.virtualWrite(SLOT0_GAIN_SLIDER, 0);
    Blynk.virtualWrite(SLOT1_GAIN_SLIDER, 0);
    Blynk.virtualWrite(SLOT2_GAIN_SLIDER, 0);
+   Blynk.virtualWrite(SLOT3_GAIN_SLIDER, 0);
    Blynk.virtualWrite(MONITOR_GAIN_SLIDER, 0);
    Blynk.virtualWrite(ROUTING, LOW);
    Blynk.syncVirtual(ROUTING);
@@ -255,17 +262,17 @@ void SetLatencyForSlot(uint8_t slot, uint8_t latency)
    }
 }
 
-BLYNK_WRITE(USER1_LATENCY) // Connection 1 buffer adjustment
+BLYNK_WRITE(SLOT1_LATENCY) // Connection 1 buffer adjustment
 {
    SetLatencyForSlot(0, param.asInt() - 1);
 }
 
-BLYNK_WRITE(USER2_LATENCY) // Connection 2 buffer adjustment
+BLYNK_WRITE(SLOT2_LATENCY) // Connection 2 buffer adjustment
 {
    SetLatencyForSlot(1, param.asInt() - 1);
 }
 
-BLYNK_WRITE(USER3_LATENCY) // Connection 3 buffer adjustment
+BLYNK_WRITE(SLOT3_LATENCY) // Connection 3 buffer adjustment
 {
    SetLatencyForSlot(2, param.asInt() - 1);
 }
@@ -274,19 +281,14 @@ void UserSelected(uint8_t user)
 {
    uint8_t i;
    uint8_t slot=0;
+   char ip[32];
 
    printf("The select user is index %d.\r\n", user);
 
    KillAllSlots();
 
-   currentUser = user;
-
-   for (i=0; i<4; i++) 
+   for (i=0; i<TOTAL_SLOTS; i++) 
    {
-      if (i == user) 
-      {
-         continue;
-      }
       // set parameters
       connectionParams[slot].serverOffset = user * 10 + i;
       connectionParams[slot].clientOffset = i * 10 + user;
@@ -294,50 +296,39 @@ void UserSelected(uint8_t user)
       strcpy(connectionParams[slot].clientIP, users[i].ipAddr);
       SetSlotRole(slot, defaultRoles[user][slot]);
 
-      Blynk.setProperty(roleButton[slot], "label", users[i].name);
-      Blynk.virtualWrite(ipAddrBox[slot], connectionParams[slot].clientIP);
+      Blynk.setProperty(connectButton[slot], "label", users[i].name);
+      sprintf(ip, "%s:%s", users[slot].ipAddr, users[slot].port);
+      Blynk.setProperty(roleButton[slot], "label", ip);
       Blynk.virtualWrite(latencySlider[slot],4);
       Blynk.virtualWrite(roleButton[slot], connectionParams[slot].role);
       slot++;
    }
 }
 
-BLYNK_WRITE(ADDRESS_BOOK) //Address Book
+BLYNK_WRITE(SESSION_DROP_DOWN) //Address Book
 {
-   printf("Got address book value write: %d \r\n", param.asInt());
+   int i;
    int user = param.asInt();
+   char label[] = "Connection 1";
+
+   printf("Got address book value write: %d \r\n", param.asInt());
+
    switch (user)
    {
       case 1: // New Session
-         Blynk.virtualWrite(USER1_IPADDR,"\r");
-         Blynk.syncVirtual(USER1_IPADDR);
+         for (i=0; i<TOTAL_SLOTS; i++) {
+            Blynk.virtualWrite(roleButton[i], LOW);
+            Blynk.syncVirtual(roleButton[i]);
+            Blynk.setProperty(roleButton[i], "label", "");
 
-         Blynk.virtualWrite(USER2_IPADDR,"\r");
-         Blynk.syncVirtual(USER2_IPADDR);
+            Blynk.virtualWrite(editButton[i], LOW);
+            Blynk.syncVirtual(editButton[i]);
+            sprintf(label, "Connection %d", i);
+            Blynk.setProperty(editButton[i], "label", label);
 
-         Blynk.virtualWrite(USER3_IPADDR,"\r");
-         Blynk.syncVirtual(USER3_IPADDR);
-
-         Blynk.virtualWrite(USER1_ROLE,LOW);
-         Blynk.syncVirtual(USER1_ROLE);
-         Blynk.setProperty(USER1_ROLE,"label","Connection 1");
-
-         Blynk.virtualWrite(USER2_ROLE,LOW);
-         Blynk.syncVirtual(USER2_ROLE);
-         Blynk.setProperty(USER2_ROLE,"label","Connection 2");
-
-         Blynk.virtualWrite(USER3_ROLE,LOW);
-         Blynk.syncVirtual(USER3_ROLE);
-         Blynk.setProperty(USER3_ROLE,"label","Connection 3");
-
-         Blynk.virtualWrite(USER1_LATENCY,4);
-         Blynk.syncVirtual(USER1_LATENCY);
-
-         Blynk.virtualWrite(USER2_LATENCY,4);
-         Blynk.syncVirtual(USER2_LATENCY);
-
-         Blynk.virtualWrite(USER3_LATENCY,4);
-         Blynk.syncVirtual(USER3_LATENCY);	
+            Blynk.virtualWrite(latencySlider[i], 4);
+            Blynk.syncVirtual(SLOT1_LATENCY);
+         }
          break;
 
       case 2:
@@ -397,7 +388,7 @@ void OpenSlot(int slot)
    char jacktripCommand[128];
    int offset = GetCurrentOffset(slot);
 
-   Blynk.virtualWrite(ConnectButton[slot] ,HIGH);
+   Blynk.virtualWrite(connectButton[slot] ,HIGH);
    sprintf(jacktripCommand, "jacktrip -o%d -n1 -z -%s -q%s &", offset, connectionParams[slot].connectionType, connectionParams[slot].rxBufferSize);
    printf("%s\r\n",jacktripCommand);
    system(jacktripCommand);
@@ -409,7 +400,7 @@ void KillSlot(int slot)
    char killcmd[128];
    int offset = GetCurrentOffset(slot);
 
-   Blynk.virtualWrite(ConnectButton[slot] ,LOW);
+   Blynk.virtualWrite(connectButton[slot] ,LOW);
    enableVolume[slot] = false;
    //send kill command
    sprintf(killcmd, "kill `ps aux | grep \"[j]acktrip -o%d\" | awk '{print $2}'`", offset);
@@ -455,18 +446,18 @@ void ConnectSlot(int slot, int pressed)
    }
 }
 
-BLYNK_WRITE(USER1_CONNECT ) //Connection 1 Connect button
+BLYNK_WRITE(SLOT1_START_BUTTON ) //Connection 1 Connect button
 {
    ConnectSlot(0, param[0].asInt());
 }
 
 
-BLYNK_WRITE(USER2_CONNECT) //Connection 2 Connect button
+BLYNK_WRITE(SLOT2_START_BUTTON) //Connection 2 Connect button
 {
    ConnectSlot(1, param[0].asInt());
 }
 
-BLYNK_WRITE(USER3_CONNECT) //Connection 3 Connect button
+BLYNK_WRITE(SLOT3_START_BUTTON) //Connection 3 Connect button
 {
    ConnectSlot(2, param[0].asInt());
 }
@@ -486,7 +477,7 @@ void SetSlotIpAddress(uint8_t slot, const char *newIp) {
    }
    else
    {
-      Blynk.virtualWrite(ipAddrBox[slot],"\r");
+      Blynk.setProperty(roleButton[slot], "label", "");
    }
 }
 
@@ -525,7 +516,6 @@ void SetSlotRole(uint8_t slot, uint8_t role)
    else
    {
       sprintf(connectionParams[slot].connectionType,"s --clientname slot%d",slot);
-      Blynk.setProperty(START_JACK, "color", "D3435C");
    }
    connectionParams[slot].role = role;
    printf("Slot %d connection type is now: %s\r\n", slot, connectionParams[slot].connectionType);
@@ -535,32 +525,19 @@ void SetSlotRole(uint8_t slot, uint8_t role)
    }
 }
 
-BLYNK_WRITE(USER1_ROLE) //Connection 1 Connection Type
+BLYNK_WRITE(SLOT1_ROLE_BUTTON) //Connection 1 Connection Type
 {
    SetSlotRole(0, param[0].asInt());
 }
 
-BLYNK_WRITE(USER2_ROLE) //Connection 2 Connection Type
+BLYNK_WRITE(SLOT2_ROLE_BUTTON) //Connection 2 Connection Type
 {
    SetSlotRole(1, param[0].asInt());
 }
 
-BLYNK_WRITE(USER3_ROLE) //Connection 3 Connection Type
+BLYNK_WRITE(SLOT3_ROLE_BUTTON) //Connection 3 Connection Type
 {
    SetSlotRole(2, param[0].asInt());
-}
-
-BLYNK_WRITE(START_JACK) //Start Jack button
-{
-   char jackCommand[128] = "jackd";
-
-   if (param[0])
-   {
-      printf("Start_Jam \r\n");
-      KillAllSlots();
-      sprintf(jackCommand,"sh start_jack.sh -r%s &",sampleRate);
-      system(jackCommand);
-   }
 }
 
 BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
@@ -683,7 +660,8 @@ void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input
 			sprintf(ecaCommand,"ai-add jack,slot%d",slot);  //Connect receive from slot to Ecasound chain
 			eci_command(ecaCommand);
 			printf("%s\r\n",ecaCommand);
-			sprintf(ecaCommand,"jack_disconnect system:playback_1 slot%d:receive_1",slot);  //Disconnect jacktrip from system playback since connection is now to Ecasound
+         //Disconnect jacktrip from system playback since connection is now to Ecasound
+			sprintf(ecaCommand,"jack_disconnect system:playback_1 slot%d:receive_1",slot);  
 			system(ecaCommand);
 		}
 		else  //If this slot is a client
@@ -692,7 +670,8 @@ void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input
 			printf("%s\r\n",ecaCommand);
 			eci_command(ecaCommand);
 			printf("%s\r\n",ecaCommand);
-			sprintf(ecaCommand,"jack_disconnect system:playback_1 %s:receive_1",connectionParams[slot].clientIP); //Disconnect jacktrip from system playback since connection is now to Ecasound
+         //Disconnect jacktrip from system playback since connection is now to Ecasound
+			sprintf(ecaCommand,"jack_disconnect system:playback_1 %s:receive_1",connectionParams[slot].clientIP); 
 			system(ecaCommand);			
 		}
 		eci_command("cop-add -eadb:0");  // add gain chain operator
@@ -702,13 +681,13 @@ void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input
 		switch (slot)
 		{
 		case 0:
-			Blynk.virtualWrite(SLOT0_GAIN_SLIDER, 0);
-			break;
-		case 1:
 			Blynk.virtualWrite(SLOT1_GAIN_SLIDER, 0);
 			break;
-		case 2:
+		case 1:
 			Blynk.virtualWrite(SLOT2_GAIN_SLIDER, 0);
+			break;
+		case 2:
+			Blynk.virtualWrite(SLOT3_GAIN_SLIDER, 0);
 			break;
 		default:
 			break;
@@ -741,7 +720,7 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 		eci_command("cs-status");  //Get the chainsetup status
 		printf("Chain operator status: %s\n", eci_last_string());
 
-		enableVolume[3] = true;
+		myVolumeIsEnabled = true;
 		Blynk.virtualWrite(MONITOR_GAIN_SLIDER, 0);
 	
 		eci_command("c-add outL");  //Add a chain for main out left
@@ -794,7 +773,7 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 		eci_command("cop-status");
 		printf("Chain operator status: %s", eci_last_string());
 		eci_command("cs-remove");
-		for (i=0; i<TOTAL_USERS; i++)   //Disable the gain control for all slots since Ecasound is stopped
+		for (i=0; i<TOTAL_SLOTS; i++)   //Disable the gain control for all slots since Ecasound is stopped
 			{
 				enableVolume[i] = false;
 			}
@@ -809,51 +788,122 @@ void SetGainFromSlider(int gain)   //Get gain from the slider widget, apply to t
 		eci_command(ecaCommand);
 	}
 
-BLYNK_WRITE(SLOT0_GAIN_SLIDER)  // slot0 Gain slider
+void GainSliderChanged(int slider, int value)
 {
+   char msg[32];
 
-	if (enableVolume[0])  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
+	if (enableVolume[slider])  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
 	{
-		eci_command("c-select slot0");
-		SetGainFromSlider(param[0].asInt());
+      sprintf(msg, "c-select slot%d", slider);
+		eci_command(msg);
+		SetGainFromSlider(value);
 	}
 	else
 	{
-		Blynk.virtualWrite(SLOT0_GAIN_SLIDER, 0);
+		Blynk.virtualWrite(gainSlider[slider], 0);
 	}
 }
 
-
-BLYNK_WRITE(SLOT1_GAIN_SLIDER)  // slot1 Gain slider
+BLYNK_WRITE(SLOT1_GAIN_SLIDER)  // slot0 Gain slider
 {
-	if (enableVolume[1]) //Check to make sure the slot is connected/routed otherwise gain control should be ignored
-	{	
-		eci_command("c-select slot1");
-		SetGainFromSlider(param[0].asInt());
-	}
-	else
-	{
-		Blynk.virtualWrite(SLOT1_GAIN_SLIDER, 0);
-	}	
+   GainSliderChanged(0, param[0].asInt());
 }
 
 
-BLYNK_WRITE(SLOT2_GAIN_SLIDER)  // slot2 Gain slider
+BLYNK_WRITE(SLOT2_GAIN_SLIDER)  // slot1 Gain slider
 {
-	if (enableVolume[2])  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
-	{	
-		eci_command("c-select slot2");
-		SetGainFromSlider(param[0].asInt());
-	}
-	else
-	{
-		Blynk.virtualWrite(SLOT2_GAIN_SLIDER, 0);
-	}	
+   GainSliderChanged(1, param[0].asInt());
+}
+
+
+BLYNK_WRITE(SLOT3_GAIN_SLIDER)  // slot2 Gain slider
+{
+   GainSliderChanged(2, param[0].asInt());
+}
+
+BLYNK_WRITE(LEFT_EDIT_FIELD_TEXT_BOX) //Left edit field
+{
+	//check currently active edit button, if none are active do nothing, if 'save session' is active do nothing
+	//for the 3 slot edit buttons, write the new name, somthing like the next 2 lines only slot dependent?
+	strcpy(users[slotBeingEdited].name, param[0].asStr());  //write new user name for active slot
+	Blynk.setProperty(connectButton[slotBeingEdited], "label", users[slotBeingEdited].name); // Write user name as label to connect button for active slot
+}
+
+BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
+{
+   char *p;
+   char buf[64];
+
+   strcpy(buf, param[0].asStr());
+
+   // find name
+   p = strtok(buf, ":");
+   if (p == NULL) return;
+   strcpy(users[slotBeingEdited].ipAddr, p);
+   strcpy(connectionParams[slotBeingEdited].clientIP, p);
+
+   p = strtok(NULL, ":");
+   if (p == NULL) return;
+   strcpy(users[slotBeingEdited].port, p);
+   strcpy(connectionParams[slotBeingEdited].clientIP, p);
+
+   Blynk.setProperty(roleButton[slotBeingEdited], "label", param[0].asStr());
+}
+
+static void EditButtonClicked(int slot, int state)
+{
+   char msg[32];
+   int i;
+
+   if (state)
+   {
+      slotBeingEdited = slot;
+
+	   //Turn off any other active edit buttons or the 'save session' button
+      for(i=0; i<TOTAL_SLOTS; i++) {
+         if(i!=slot) {
+            Blynk.virtualWrite(editButton[i], LOW);
+         }
+      }
+      Blynk.virtualWrite(SESSION_SAVE_BUTTON, LOW);
+
+		//Store this button as the currently active edit button
+      sprintf(msg, "NAME Connection %d", slot+1);
+		Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX, "label", msg);  //Populate the label for the left edit field
+		Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, users[slot].name);										  //Seed the data for the left edit field
+
+		Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "IP_ADRESS:Port_Offset");                     //Populate the label for the right edit field
+      sprintf(msg, "%s:%s", users[slot].ipAddr, users[slot].port);
+		Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, msg);                              //Seed the data for the right edit field
+   }
+   else
+   {
+		Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX,"label"," ");  //clear left edit field label
+		Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,"\r");         //clear left edit field data
+		Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX,"label"," ");  //clear right edit field label
+		Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"\r");        //clear right edit field data
+		//clear currently active edit button
+   }
+}
+
+BLYNK_WRITE(SLOT1_EDIT_BUTTON) //Connection 1 Edit button
+{
+   EditButtonClicked(0, param[0]);
+}
+
+BLYNK_WRITE(SLOT2_EDIT_BUTTON) //Connection 1 Edit button
+{
+   EditButtonClicked(1, param[0]);
+}
+
+BLYNK_WRITE(SLOT3_EDIT_BUTTON) //Connection 1 Edit button
+{
+   EditButtonClicked(2, param[0]);
 }
 
 BLYNK_WRITE(MONITOR_GAIN_SLIDER)  // Monitor Gain slider
 {
-	if (enableVolume[3])  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
+	if (myVolumeIsEnabled)  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
 	{
 		eci_command("c-select self");
 		SetGainFromSlider(param[0].asInt());
@@ -888,6 +938,10 @@ int main(int argc, char* argv[])
    puts("User info read, continuing...");
 
    parse_options(argc, argv, auth, serv, port);
+
+   printf("auth: %s\r\n", auth);
+   printf("serv: %s\r\n", serv);
+   printf("port: %d\r\n", port);
 
    setup();
 

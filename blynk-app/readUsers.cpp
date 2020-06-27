@@ -51,7 +51,12 @@ static void parseLine(UserRecord_T *users, char *line)
    p = strip(p);
    strcpy(users->ipAddr, p);
 
-   printf("Username: <%s>, ip address: <%s>\r\n", users->name, users->ipAddr);
+   p = strtok(NULL, ",");
+   if (p == NULL) return;
+   p = strip(p);
+   strcpy(users->port, p);
+
+   printf("Username: <%s>, ip address: <%s>, port: %s\r\n", users->name, users->ipAddr, users->port);
 }
 
 int readUsers(UserRecord_T *users)
@@ -70,7 +75,7 @@ int readUsers(UserRecord_T *users)
       while((numread = getline(&pBuf, &len, fp)) != -1)
       {
          if(lines > 0) parseLine(&users[lines-1], pBuf);
-         if(lines > 3) break;
+         if(lines > 2) break;
          lines++;
       }
    }

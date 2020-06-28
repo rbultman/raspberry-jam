@@ -61,7 +61,6 @@ int gainSlider[TOTAL_SLOTS] = {
 
 ConnectionInfo_T connections[TOTAL_SLOTS];
 SessionInfo_T sessionInfo;
-
 std::vector<char *> sessionNames;
 
 int slotBeingEdited = -1;
@@ -222,15 +221,20 @@ BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
 {
    printf("New output level: %s\n", param[0].asStr());
    sprintf(mixCommand, "amixer -M set %s %s%%", mixMasterCommand, param[0].asStr());
-   system(mixCommand);
    printf("%s\r\n",mixCommand);
+   system(mixCommand);
+
+   sessionInfo.outputLevel = param[0].asInt();
 }
 
 BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
 {
    printf("New input level: %s\n", param[0].asStr());
    sprintf(mixCommand, "amixer -M set %s %s%%", mixCaptureCommand, param[0].asStr());
+   printf("%s\r\n",mixCommand);
    system(mixCommand);
+
+   sessionInfo.inputLevel = param[0].asInt();
 }
 
 void SetLatencyForSlot(uint8_t slot, uint8_t latency)
@@ -240,6 +244,7 @@ void SetLatencyForSlot(uint8_t slot, uint8_t latency)
    } else {
       printf("New latency for slot %d: %s \r\n", slot, rxBufferSize[latency]);
       strcpy(connectionParams[slot].rxBufferSize, rxBufferSize[latency]);
+      connections[slot].latency = latency;
       if (connectionState[slot]) 
       {
          KillSlot(slot);
@@ -263,41 +268,52 @@ BLYNK_WRITE(SLOT3_LATENCY) // Connection 3 buffer adjustment
    SetLatencyForSlot(2, param.asInt() - 1);
 }
 
-#ifdef KILL
-void UserSelected(uint8_t user)
+void PopulateUiWithSessionInfo()
 {
    uint8_t i;
-   uint8_t slot=0;
    char ip[32];
-
-   printf("The select user is index %d.\r\n", user);
 
    KillAllSlots();
 
    for (i=0; i<TOTAL_SLOTS; i++) 
    {
       // set parameters
-      connectionParams[slot].serverOffset = user * 10 + i;
-      connectionParams[slot].clientOffset = i * 10 + user;
-      connectionParams[slot].user = i;
-      strcpy(connectionParams[slot].clientIP, connections[i].ipAddr);
-      SetSlotRole(slot, defaultRoles[user][slot]);
+      connectionParams[i].serverOffset = connections[i].port;
+      connectionParams[i].clientOffset = connections[i].port;
+      connectionParams[i].user = i;
+      connectionParams[i].role = connections[i].role;
+      strcpy(connectionParams[i].clientIP, connections[i].ipAddr);
+      SetSlotRole(i, connections[i].role);
 
-      Blynk.setProperty(connectButton[slot], "label", connections[i].name);
-      sprintf(ip, "%s:%s", connections[slot].ipAddr, connections[slot].port);
-      Blynk.setProperty(roleButton[slot], "label", ip);
-      Blynk.virtualWrite(latencySlider[slot],4);
-      Blynk.virtualWrite(roleButton[slot], connectionParams[slot].role);
-      slot++;
+      Blynk.setProperty(connectButton[i], "label", connections[i].name);
+      sprintf(ip, "%s:%d", connections[i].ipAddr, connections[i].port);
+      printf("Setting role button label to %s\r\n", ip);
+      Blynk.setProperty(roleButton[i], "label", ip);
+      Blynk.virtualWrite(latencySlider[i],4);
+      Blynk.virtualWrite(roleButton[i], connectionParams[i].role);
+
+
+      Blynk.virtualWrite(INPUT_LEVEL, sessionInfo.inputLevel);
+      Blynk.virtualWrite(OUTPUT_LEVEL, sessionInfo.outputLevel);
+      Blynk.virtualWrite(SAMPLE_RATE, sessionInfo.sampleRate);
+      Blynk.virtualWrite(MONITOR_GAIN_SLIDER, sessionInfo.monitorGain);
+      Blynk.virtualWrite(INPUT_SELECT, sessionInfo.inputSelect);
+      Blynk.virtualWrite(MIC_GAIN, sessionInfo.micBoost);
    }
 }
-#endif
 
 void PopulateSlotInfoForSession(const char * sessionName)
 {
    puts("\r\n---> Getting all session info...");
-   GetAllSessionInfo(sessionName, &sessionInfo, connections);
-   puts("---> ...got all session info\r\n");
+   if(0 == GetAllSessionInfo(sessionName, &sessionInfo, connections))
+   {
+      puts("---> ...got all session info\r\n");
+      PopulateUiWithSessionInfo();
+   }
+   else
+   {
+      puts("---> ERROR getting session info\r\n");
+   }
 }
 
 void PopulateSessionInfo(int session)
@@ -322,7 +338,7 @@ BLYNK_WRITE(SESSION_DROP_DOWN) // Sessions Book
    int user = param.asInt();
    char label[] = "Connection 1";
 
-   printf("Got address book value write: %d \r\n", param.asInt());
+   printf("Got a new selection from the session list: %d \r\n", param.asInt());
 
    if (user == 1)
    {
@@ -376,6 +392,8 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
    KillAllSlots();
    sprintf(jackCommand,"sh start_jack.sh -r%s &",sampleRate);
    system(jackCommand);	
+
+   sessionInfo.sampleRate = param.asInt();
 }
 
 int GetCurrentOffset(int slot)
@@ -481,8 +499,10 @@ void SetSlotIpAddress(uint8_t slot, const char *newIp) {
    if (ipCheck == 0)
    {	
       strcpy(connectionParams[slot].clientIP, newIp);
+      strcpy(connections[slot].ipAddr, newIp);
       Blynk.virtualWrite(roleButton[slot], HIGH);
       connectionParams[slot].role = 1;
+      connections[slot].role = 1;
       sprintf(connectionParams[slot].connectionType, "c%s", connectionParams[slot].clientIP);
       printf("<%s>\r\n",connectionParams[slot].clientIP);
    }
@@ -511,6 +531,7 @@ void SetSlotRole(uint8_t slot, uint8_t role)
       sprintf(connectionParams[slot].connectionType,"s --clientname slot%d",slot);
    }
    connectionParams[slot].role = role;
+   connections[slot].role = role;
    printf("Slot %d connection type is now: %s\r\n", slot, connectionParams[slot].connectionType);
    if (restartNeeded)
    {
@@ -575,6 +596,7 @@ BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
 BLYNK_WRITE(INPUT_SELECT) //Input Selection
 {
    printf("New input selected: %s\n", param[0].asStr());
+   sessionInfo.inputSelect = param[0];
    if (param[0])
    {
       system(inputMicCommand);
@@ -629,6 +651,7 @@ BLYNK_WRITE(MIC_GAIN) //Mic Gain
          default:
             printf("Unknown item selected \r\n");
       }
+      sessionInfo.micBoost = micGainIndex;
    }
 }
 
@@ -788,6 +811,7 @@ void GainSliderChanged(int slider, int value)
       sprintf(msg, "c-select slot%d", slider);
 		eci_command(msg);
 		SetGainFromSlider(value);
+      connections[slider].gain = value;
 	}
 	else
 	{
@@ -828,8 +852,7 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
    // find name
    p = strtok(buf, ":");
    if (p == NULL) return;
-   strcpy(connections[slotBeingEdited].ipAddr, p);
-   strcpy(connectionParams[slotBeingEdited].clientIP, p);
+   SetSlotIpAddress(slotBeingEdited, p);
 
    p = strtok(NULL, ":");
    if (p == NULL) return;
@@ -837,7 +860,9 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
    connections[slotBeingEdited].port = strtol(p, NULL, 10);
    strcpy(connectionParams[slotBeingEdited].clientIP, p);
 
-   Blynk.setProperty(roleButton[slotBeingEdited], "label", param[0].asStr());
+   sprintf(buf, "%s:%d", connections[slotBeingEdited].ipAddr, connections[slotBeingEdited].port);
+
+   Blynk.setProperty(roleButton[slotBeingEdited], "label", buf);
 }
 
 static void EditButtonClicked(int slot, int state)
@@ -863,7 +888,7 @@ static void EditButtonClicked(int slot, int state)
 		Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, connections[slot].name);										  //Seed the data for the left edit field
 
 		Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "IP_ADRESS:Port_Offset");                     //Populate the label for the right edit field
-      sprintf(msg, "%s:%s", connections[slot].ipAddr, connections[slot].port);
+      sprintf(msg, "%s:%d", connections[slot].ipAddr, connections[slot].port);
 		Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, msg);                              //Seed the data for the right edit field
    }
    else
@@ -897,6 +922,7 @@ BLYNK_WRITE(MONITOR_GAIN_SLIDER)  // Monitor Gain slider
 	{
 		eci_command("c-select self");
 		SetGainFromSlider(param[0].asInt());
+      sessionInfo.monitorGain = param[0].asInt();
 	}
 	else
 	{
@@ -923,15 +949,7 @@ void loop()
 
 int main(int argc, char* argv[])
 {
-   //readUsers(&connections[0]);
-
-   puts("User info read, continuing...");
-
    parse_options(argc, argv, auth, serv, port);
-
-   printf("auth: %s\r\n", auth);
-   printf("serv: %s\r\n", serv);
-   printf("port: %d\r\n", port);
 
    setup();
 

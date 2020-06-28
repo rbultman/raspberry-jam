@@ -136,23 +136,23 @@ static int ConnectionCallback(void *data, int argc, char **argv, char **azColNam
 
    for(i = 0; i<argc; i++){
       if (0 == strcmp("name", azColName[i])) {
-         strcpy(pConnection->name, argv[i]);
-         printf("Connection name: %s\r\n", pConnection->name);
+         strcpy(pConnection[connectionIndex].name, argv[i]);
+         printf("Connection name: %s\r\n", pConnection[connectionIndex].name);
       } else if (0 == strcmp("ipAddr", azColName[i])) {
-         strcpy(pConnection->ipAddr, argv[i]);
-         printf("IP Address: %s\r\n", pConnection->ipAddr);
+         strcpy(pConnection[connectionIndex].ipAddr, argv[i]);
+         printf("IP Address: %s\r\n", pConnection[connectionIndex].ipAddr);
       } else if (0 == strcmp("port", azColName[i])) {
-         pConnection->port = strtol(argv[i], NULL, 10);
-         printf("Port: %d\r\n", pConnection->port);
+         pConnection[connectionIndex].port = strtol(argv[i], NULL, 10);
+         printf("Port: %d\r\n", pConnection[connectionIndex].port);
       } else if (0 == strcmp("role", azColName[i])) {
-         pConnection->role = strtol(argv[i], NULL, 10);
-         printf("Role: %d\r\n", pConnection->role);
+         pConnection[connectionIndex].role = strtol(argv[i], NULL, 10);
+         printf("Role: %d\r\n", pConnection[connectionIndex].role);
       } else if (0 == strcmp("latency", azColName[i])) {
-         pConnection->latency = strtol(argv[i], NULL, 10);
-         printf("Latency: %d\r\n", pConnection->latency);
+         pConnection[connectionIndex].latency = strtol(argv[i], NULL, 10);
+         printf("Latency: %d\r\n", pConnection[connectionIndex].latency);
       } else if (0 == strcmp("gain", azColName[i])) {
-         pConnection->gain = strtol(argv[i], NULL, 10);
-         printf("Gain: %d\r\n", pConnection->gain);
+         pConnection[connectionIndex].gain = strtol(argv[i], NULL, 10);
+         printf("Gain: %d\r\n", pConnection[connectionIndex].gain);
       } else if (0 == strcmp("id", azColName[i])) {
          printf("ID: %s\r\n", argv[i]);
       } else if (0 == strcmp("session_name", azColName[i])) {

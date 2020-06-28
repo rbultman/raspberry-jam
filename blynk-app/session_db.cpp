@@ -215,7 +215,7 @@ int GetAllSessionInfo(const char *sessionName, SessionInfo_T * pSessionInfo, Con
 }
 
 //CREATE TABLE connection(session_name varchar(64), slot int, name varchar(64), ipAddr varchar(20), port int, role int, latency int, gain int, PRIMARY KEY (session_name, slot));
-int SaveConnectionInfo(SessionInfo_T * pSessionInfo, ConnectionInfo_T * pConnections) {
+static int SaveConnectionInfo(SessionInfo_T * pSessionInfo, ConnectionInfo_T * pConnections) {
    sqlite3 *db;
    char *zErrMsg = 0;
    int rc;
@@ -293,6 +293,50 @@ int SaveAllSessionInfo(SessionInfo_T * pSessionInfo, ConnectionInfo_T * pConnect
 
    SaveSessionInfo(pSessionInfo);
    SaveConnectionInfo(pSessionInfo, pConnections);
+
+   return retval;
+}
+
+int DeleteSessionInfo(const char * sessionName) {
+   sqlite3 *db;
+   char *zErrMsg = 0;
+   int rc;
+   char sql[256];
+   int retval = 0;
+
+   /* Open database */
+   rc = sqlite3_open(dbFile, &db);
+
+   if( rc ) {
+      fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+      return(1);
+   }
+
+   /* Create SQL statement */
+   sprintf(sql, "DELETE FROM session WHERE name = '%s'", sessionName);
+
+   /* Execute SQL statement */
+   rc = sqlite3_exec(db, sql, NULL, NULL, &zErrMsg);
+
+   if( rc != SQLITE_OK ) {
+      fprintf(stderr, "SQL error deleting from session table: %s\n", zErrMsg);
+      sqlite3_free(zErrMsg);
+      retval = 1;
+   }
+
+   /* Create SQL statement */
+   sprintf(sql, "DELETE FROM connection WHERE session_name = '%s'", sessionName);
+
+   /* Execute SQL statement */
+   rc = sqlite3_exec(db, sql, NULL, NULL, &zErrMsg);
+
+   if( rc != SQLITE_OK ) {
+      fprintf(stderr, "SQL error deleting from connection table: %s\n", zErrMsg);
+      sqlite3_free(zErrMsg);
+      retval = 1;
+   }
+
+   sqlite3_close(db);
 
    return retval;
 }

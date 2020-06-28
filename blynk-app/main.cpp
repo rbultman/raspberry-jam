@@ -16,7 +16,6 @@
 #endif
 #include <BlynkSocket.h>
 #include <BlynkOptionsParser.h>
-#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <libecasoundc/ecasoundc.h>
@@ -26,6 +25,7 @@
 #include "session_db.h"
 #include "pinDefs.h"
 #include "sessionInfo.h"
+#include "utility.h"
 
 #define TOTAL_SLOTS 3
 
@@ -68,7 +68,8 @@ int slotBeingEdited = -1;
 enum {
    EditMode_Idle,
    EditMode_Connection,
-   EditMode_Session
+   EditMode_Session,
+   EditMode_DeleteSession
 };
 int editMode = EditMode_Idle;
 
@@ -87,7 +88,6 @@ char inputMicCommand[100] = "amixer ";
 char inputLineCommand[100] = "amixer ";
 char micGainCommand[50];
 char ecaCommand[100];
-char connectionName[50];
 char connectedSlots[64];
 int micGainIndex =0;
 bool audioInjector = false;
@@ -97,7 +97,6 @@ bool myVolumeIsEnabled = false;
 
 int longPressMillis = 2000;    // time in millis needed for longpress
 int longPressTimer;
-int longPressTimer2;
 bool buttonState = false;
 
 #define BUFFER_SIZES 10
@@ -139,38 +138,6 @@ void KillSlot(int slot);
 void KillAllSlots();
 void OpenSlot(int slot);
 
-static void sleep_millis(int millis)
-{
-   struct timespec req = {0};
-   req.tv_sec = 0;
-   req.tv_nsec = millis * 1000000L;
-   nanosleep(&req, (struct timespec *)NULL);
-}
-
-int checkIpFormat(const char *ip) {
-   uint16_t quad[4];
-   uint8_t numread;
-   uint8_t i;
-
-   printf("Checking: %s\r\n", ip);
-
-   numread = sscanf(ip, "%hu.%hu.%hu.%hu", &quad[0], &quad[1], &quad[2], &quad[3]);
-
-   if (numread != 4) {
-      puts("Not enough numbers entered.");
-      return 1;
-   }
-
-   for(i=0; i<4; i++) {
-      if (quad[i] > 255) {
-         printf("Number out of range: %hu\r\n", quad[i]);
-         return 2;
-      } 
-   }
-
-   return 0;
-}
-
 static void PopulateSessionDropDown() {
    int i;
    char buf[64*64];
@@ -195,7 +162,6 @@ static void PopulateSessionDropDown() {
 
    puts("----> Setting labels for session drop down.");
    Blynk.setProperty(SESSION_DROP_DOWN, "labels", labels);
-   //Blynk.syncVirtual(SESSION_DROP_DOWN); 
 }
 
 BLYNK_CONNECTED() {
@@ -488,7 +454,7 @@ void ConnectSlot(int slot, int pressed)
    {
       KillSlot(slot);
       OpenSlot(slot);
-      longPressTimer = tmr.setTimeout(2000, DisconnectSlot, (void *)slot);
+      longPressTimer = tmr.setTimeout(longPressMillis, DisconnectSlot, (void *)slot);
    }
    else
    {	
@@ -982,6 +948,37 @@ BLYNK_WRITE(MONITOR_GAIN_SLIDER)  // Monitor Gain slider
 	}	
 }
 
+bool longPressDetected = false;
+
+void EnterDeleteSessionState(void *notused)
+{
+   puts("Long press detected.");
+   tmr.deleteTimer(longPressTimer);
+
+   longPressDetected  = true;
+
+   switch(editMode) {
+      case EditMode_Session:
+         editMode = EditMode_DeleteSession;
+         puts("In delete mode.");
+         Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX, "label", "Delte session info");
+         Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, "Tap Session to abort");
+
+         Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "Hold Session to delete");
+         Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, sessionInfo.name);
+         break;
+
+      case EditMode_DeleteSession:
+         puts("Deleting session");
+         ClearEditBoxes();
+         DeleteSessionInfo(sessionInfo.name);
+         PopulateSessionDropDown();
+         Blynk.virtualWrite(SESSION_DROP_DOWN, 1);
+         Blynk.syncVirtual(SESSION_DROP_DOWN);
+         break;
+   }
+}
+
 BLYNK_WRITE(SESSION_SAVE_BUTTON)
 {
    int i;
@@ -989,39 +986,71 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
 
    if(param[0])
    {
-      for(i=0; i<TOTAL_SLOTS; i++) 
-      {
-         Blynk.virtualWrite(editButton[i], LOW);
+      puts("Button pressed.");
+      longPressTimer = tmr.setTimeout(longPressMillis, EnterDeleteSessionState, NULL);
+
+      if (editMode == EditMode_DeleteSession) {
+         return;
       }
 
-      editMode = EditMode_Session;
+      if (editMode == EditMode_Session) {
+         SaveAllSessionInfo(&sessionInfo, connections);
 
-		Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX, "label", "Save session info");
-		Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, "Edit name, tap Session");
+         strcpy(buf, sessionInfo.name);
 
-		Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "Session Name");
-		Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, sessionInfo.name);
+         // reset edit info
+         Blynk.virtualWrite(SESSION_SAVE_BUTTON, LOW);
+         ClearEditBoxes();
+
+         PopulateSessionDropDown();
+
+         for(i=0; i<sessionNames.size(); i++)
+         {
+            printf("Comparing %s to %s\r\n", sessionNames[i], buf);
+            if (strcmp(sessionNames[i], buf) == 0)
+            {
+               printf("Trying to set the drop down to %d\r\n", i+2);
+               Blynk.virtualWrite(SESSION_DROP_DOWN, i+2);
+               break;
+            }
+         }
+      } else {
+         Blynk.virtualWrite(SESSION_SAVE_BUTTON, HIGH);
+
+         for(i=0; i<TOTAL_SLOTS; i++) 
+         {
+            Blynk.virtualWrite(editButton[i], LOW);
+         }
+
+         editMode = EditMode_Session;
+
+         Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX, "label", "Save session info");
+         Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, "Edit name, tap Session");
+
+         Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "Session Name");
+         Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, sessionInfo.name);
+      }
    }
    else
    {
-      SaveAllSessionInfo(&sessionInfo, connections);
-
-      strcpy(buf, sessionInfo.name);
-
-      // reset edit info
-      Blynk.virtualWrite(SESSION_SAVE_BUTTON, LOW);
-      ClearEditBoxes();
-
-      PopulateSessionDropDown();
-
-      for(i=0; i<sessionNames.size(); i++)
+      tmr.deleteTimer(longPressTimer);
+      puts("Button released.");
+      if (longPressDetected)
       {
-         printf("Comparing %s to %s\r\n", sessionNames[i], buf);
-         if (strcmp(sessionNames[i], buf) == 0)
+         puts("Clearing the long pressed variable");
+         longPressDetected = false;
+      }
+      else
+      {
+         puts("The long pressed variable as false");
+         if (editMode == EditMode_DeleteSession)
          {
-            printf("Trying to set the drop down to %d\r\n", i+2);
-            Blynk.virtualWrite(SESSION_DROP_DOWN, i+2);
-            break;
+            puts("Aborting delete.");
+            ClearEditBoxes();
+         }
+         else
+         {
+            puts("Edit mode is not deleting, so not going to do anything");
          }
       }
    }

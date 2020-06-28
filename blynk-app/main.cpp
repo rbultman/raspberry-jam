@@ -22,7 +22,7 @@
 #include <libecasoundc/ecasoundc.h>
 #include <string>
 #include <vector>
-//#include "readUsers.h"
+#include <ctype.h>
 #include "session_db.h"
 #include "pinDefs.h"
 #include "sessionInfo.h"
@@ -193,9 +193,9 @@ static void PopulateSessionDropDown() {
       name = GetNextSessionName();
    }
 
-   puts("----> Settein labels for session drop down.");
+   puts("----> Setting labels for session drop down.");
    Blynk.setProperty(SESSION_DROP_DOWN, "labels", labels);
-   Blynk.syncVirtual(SESSION_DROP_DOWN); 
+   //Blynk.syncVirtual(SESSION_DROP_DOWN); 
 }
 
 BLYNK_CONNECTED() {
@@ -213,6 +213,7 @@ BLYNK_CONNECTED() {
 
    // initialize menu items
    PopulateSessionDropDown();
+   Blynk.syncVirtual(SESSION_DROP_DOWN); 
 
    // set connection states to off
    for (i=0; i<TOTAL_SLOTS; i++) {
@@ -245,7 +246,7 @@ BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
    sessionInfo.inputLevel = param[0].asInt();
 }
 
-void SetLatencyForSlot(uint8_t slot, uint8_t latency)
+static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
 {
    if (latency >= BUFFER_SIZES) {
       printf("Buffer size index out of range.\r\n");
@@ -864,6 +865,8 @@ void ClearEditBoxes() {
 
 BLYNK_WRITE(LEFT_EDIT_FIELD_TEXT_BOX) //Left edit field
 {
+   char *p;
+
 	//check currently active edit button, if none are active do nothing, if 'save session' is active do nothing
 	//for the 3 slot edit buttons, write the new name, somthing like the next 2 lines only slot dependent?
    if (editMode == EditMode_Connection) {
@@ -876,6 +879,7 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
 {
    char *p;
    char buf[64];
+   int i;
 
    if (editMode == EditMode_Connection) {
       strcpy(buf, param[0].asStr());
@@ -895,7 +899,23 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
 
       Blynk.setProperty(roleButton[slotBeingEdited], "label", buf);
    } else if (editMode == EditMode_Session) {
-      strcpy(sessionInfo.name, param[0].asStr());
+      // get it
+      strcpy(buf, param[0].asStr());
+      // strip leading whitepace
+      p = &buf[0];
+      while (isspace(*p)) p++;
+      // copy remaining
+      strcpy(sessionInfo.name, p);
+      // trim trailing white space
+      for(i=strlen(sessionInfo.name)-1; i>0; i--) {
+         if(isspace(sessionInfo.name[i])) {
+            sessionInfo.name[i] = 0;
+         } else {
+            break;
+         }
+      }
+      printf("Session name is now: \r\n");
+      printf("<%s>\r\n", sessionInfo.name);
    }
 }
 
@@ -984,12 +1004,26 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
    }
    else
    {
-      // TODO: save info
       SaveAllSessionInfo(&sessionInfo, connections);
+
+      strcpy(buf, sessionInfo.name);
 
       // reset edit info
       Blynk.virtualWrite(SESSION_SAVE_BUTTON, LOW);
       ClearEditBoxes();
+
+      PopulateSessionDropDown();
+
+      for(i=0; i<sessionNames.size(); i++)
+      {
+         printf("Comparing %s to %s\r\n", sessionNames[i], buf);
+         if (strcmp(sessionNames[i], buf) == 0)
+         {
+            printf("Trying to set the drop down to %d\r\n", i+2);
+            Blynk.virtualWrite(SESSION_DROP_DOWN, i+2);
+            break;
+         }
+      }
    }
 }
 

@@ -9,7 +9,7 @@
 CC ?= gcc
 CXX ?= g++
 CXXFLAGS += -I blynk-library/src/ -I blynk-library/linux/ -DLINUX
-LDFLAGS += -lrt -lpthread -lecasoundc
+LDFLAGS += -lrt -lpthread -lecasoundc -lsqlite3
 
 ifeq ($(build),debug)
 	CXXFLAGS += -c -g2 -O0 \
@@ -52,6 +52,7 @@ endif
 
 SOURCES=main.cpp \
 	readUsers.cpp \
+	session_db.cpp \
 	blynk-library/src/utility/BlynkDebug.cpp \
 	blynk-library/src/utility/BlynkHandlers.cpp \
 	blynk-library/src/utility/BlynkTimer.cpp

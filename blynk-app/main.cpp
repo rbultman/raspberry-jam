@@ -1,4 +1,3 @@
-
 /**
  * @file       main.cpp
  * @author     Volodymyr Shymanskyy
@@ -23,10 +22,10 @@
 #include <libecasoundc/ecasoundc.h>
 #include <string>
 #include <vector>
-#include "readUsers.h"
+//#include "readUsers.h"
 #include "session_db.h"
-#include "pin_defs.h"
-#include "connectionInfo.h"
+#include "pinDefs.h"
+#include "sessionInfo.h"
 
 #define TOTAL_SLOTS 3
 
@@ -61,6 +60,7 @@ int gainSlider[TOTAL_SLOTS] = {
 };
 
 ConnectionInfo_T connections[TOTAL_SLOTS];
+SessionInfo_T sessionInfo;
 
 std::vector<char *> sessionNames;
 
@@ -263,6 +263,7 @@ BLYNK_WRITE(SLOT3_LATENCY) // Connection 3 buffer adjustment
    SetLatencyForSlot(2, param.asInt() - 1);
 }
 
+#ifdef KILL
 void UserSelected(uint8_t user)
 {
    uint8_t i;
@@ -279,21 +280,24 @@ void UserSelected(uint8_t user)
       connectionParams[slot].serverOffset = user * 10 + i;
       connectionParams[slot].clientOffset = i * 10 + user;
       connectionParams[slot].user = i;
-      strcpy(connectionParams[slot].clientIP, users[i].ipAddr);
+      strcpy(connectionParams[slot].clientIP, connections[i].ipAddr);
       SetSlotRole(slot, defaultRoles[user][slot]);
 
-      Blynk.setProperty(connectButton[slot], "label", users[i].name);
-      sprintf(ip, "%s:%s", users[slot].ipAddr, users[slot].port);
+      Blynk.setProperty(connectButton[slot], "label", connections[i].name);
+      sprintf(ip, "%s:%s", connections[slot].ipAddr, connections[slot].port);
       Blynk.setProperty(roleButton[slot], "label", ip);
       Blynk.virtualWrite(latencySlider[slot],4);
       Blynk.virtualWrite(roleButton[slot], connectionParams[slot].role);
       slot++;
    }
 }
+#endif
 
 void PopulateSlotInfoForSession(const char * sessionName)
 {
-
+   puts("\r\n---> Getting all session info...");
+   GetAllSessionInfo(sessionName, &sessionInfo, connections);
+   puts("---> ...got all session info\r\n");
 }
 
 void PopulateSessionInfo(int session)
@@ -312,14 +316,6 @@ void PopulateSessionInfo(int session)
    }
 }
 
-typedef struct ConnectionInfo_T {
-   char name[64];
-   char ipAddr[20];
-   int port;
-   int role; 
-   int latency;
-   int gain;
-} ConnectionInfo_T;
 BLYNK_WRITE(SESSION_DROP_DOWN) // Sessions Book
 {
    int i;
@@ -818,8 +814,8 @@ BLYNK_WRITE(LEFT_EDIT_FIELD_TEXT_BOX) //Left edit field
 {
 	//check currently active edit button, if none are active do nothing, if 'save session' is active do nothing
 	//for the 3 slot edit buttons, write the new name, somthing like the next 2 lines only slot dependent?
-	strcpy(users[slotBeingEdited].name, param[0].asStr());  //write new user name for active slot
-	Blynk.setProperty(connectButton[slotBeingEdited], "label", users[slotBeingEdited].name); // Write user name as label to connect button for active slot
+	strcpy(connections[slotBeingEdited].name, param[0].asStr());  //write new user name for active slot
+	Blynk.setProperty(connectButton[slotBeingEdited], "label", connections[slotBeingEdited].name); // Write user name as label to connect button for active slot
 }
 
 BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
@@ -832,12 +828,13 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
    // find name
    p = strtok(buf, ":");
    if (p == NULL) return;
-   strcpy(users[slotBeingEdited].ipAddr, p);
+   strcpy(connections[slotBeingEdited].ipAddr, p);
    strcpy(connectionParams[slotBeingEdited].clientIP, p);
 
    p = strtok(NULL, ":");
    if (p == NULL) return;
-   strcpy(users[slotBeingEdited].port, p);
+   //strcpy(connections[slotBeingEdited].port, p);
+   connections[slotBeingEdited].port = strtol(p, NULL, 10);
    strcpy(connectionParams[slotBeingEdited].clientIP, p);
 
    Blynk.setProperty(roleButton[slotBeingEdited], "label", param[0].asStr());
@@ -863,10 +860,10 @@ static void EditButtonClicked(int slot, int state)
 		//Store this button as the currently active edit button
       sprintf(msg, "NAME Connection %d", slot+1);
 		Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX, "label", msg);  //Populate the label for the left edit field
-		Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, users[slot].name);										  //Seed the data for the left edit field
+		Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, connections[slot].name);										  //Seed the data for the left edit field
 
 		Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "IP_ADRESS:Port_Offset");                     //Populate the label for the right edit field
-      sprintf(msg, "%s:%s", users[slot].ipAddr, users[slot].port);
+      sprintf(msg, "%s:%s", connections[slot].ipAddr, connections[slot].port);
 		Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, msg);                              //Seed the data for the right edit field
    }
    else
@@ -926,7 +923,7 @@ void loop()
 
 int main(int argc, char* argv[])
 {
-   readUsers(&users[0]);
+   //readUsers(&connections[0]);
 
    puts("User info read, continuing...");
 

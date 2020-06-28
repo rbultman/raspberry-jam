@@ -51,7 +51,6 @@ ifeq ($(target),raspberry)
 endif
 
 SOURCES=main.cpp \
-	readUsers.cpp \
 	session_db.cpp \
 	blynk-library/src/utility/BlynkDebug.cpp \
 	blynk-library/src/utility/BlynkHandlers.cpp \
@@ -73,6 +72,6 @@ $(EXECUTABLE): $(OBJECTS)
 
 ARCHIVE_NAME=$(shell echo blynk-rjam_`date +%Y.%m.%d-%H%M%S`.tar)
 archive:
-	tar -cf $(ARCHIVE_NAME) main.cpp readUsers.h userSpec.h start_jack.sh Makefile readUsers.cpp
+	tar -cf $(ARCHIVE_NAME) main.cpp userSpec.h start_jack.sh Makefile 
 	gzip $(ARCHIVE_NAME)
 

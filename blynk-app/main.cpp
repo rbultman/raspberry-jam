@@ -65,6 +65,13 @@ std::vector<char *> sessionNames;
 
 int slotBeingEdited = -1;
 
+enum {
+   EditMode_Idle,
+   EditMode_Connection,
+   EditMode_Session
+};
+int editMode = EditMode_Idle;
+
 static BlynkTransportSocket _blynkTransport;
 BlynkSocket Blynk(_blynkTransport);
 
@@ -186,6 +193,7 @@ static void PopulateSessionDropDown() {
       name = GetNextSessionName();
    }
 
+   puts("----> Settein labels for session drop down.");
    Blynk.setProperty(SESSION_DROP_DOWN, "labels", labels);
    Blynk.syncVirtual(SESSION_DROP_DOWN); 
 }
@@ -240,7 +248,7 @@ BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
 void SetLatencyForSlot(uint8_t slot, uint8_t latency)
 {
    if (latency >= BUFFER_SIZES) {
-      printf("Buffer size inxex out of range.\r\n");
+      printf("Buffer size index out of range.\r\n");
    } else {
       printf("New latency for slot %d: %s \r\n", slot, rxBufferSize[latency]);
       strcpy(connectionParams[slot].rxBufferSize, rxBufferSize[latency]);
@@ -272,6 +280,7 @@ void PopulateUiWithSessionInfo()
 {
    uint8_t i;
    char ip[32];
+   char label[64];
 
    KillAllSlots();
 
@@ -292,6 +301,10 @@ void PopulateUiWithSessionInfo()
       Blynk.virtualWrite(latencySlider[i],4);
       Blynk.virtualWrite(roleButton[i], connectionParams[i].role);
 
+      Blynk.virtualWrite(editButton[i], LOW);
+      Blynk.syncVirtual(editButton[i]);
+      sprintf(label, "Connection %d", i);
+      Blynk.setProperty(editButton[i], "label", label);
 
       Blynk.virtualWrite(INPUT_LEVEL, sessionInfo.inputLevel);
       Blynk.virtualWrite(OUTPUT_LEVEL, sessionInfo.outputLevel);
@@ -300,6 +313,31 @@ void PopulateUiWithSessionInfo()
       Blynk.virtualWrite(INPUT_SELECT, sessionInfo.inputSelect);
       Blynk.virtualWrite(MIC_GAIN, sessionInfo.micBoost);
    }
+}
+
+void PopulateNewSession() 
+{
+   int i;
+
+   strcpy(sessionInfo.name, "New Session");
+   sessionInfo.inputLevel = 0;
+   sessionInfo.outputLevel = 0;
+   sessionInfo.sampleRate = 0;
+   sessionInfo.monitorGain = 0;
+   sessionInfo.inputSelect = 0;
+   sessionInfo.micBoost = 0;
+
+   for (i=0; i<TOTAL_SLOTS; i++) {
+      sprintf(connections[i].name, "User %d", i);
+      sprintf(connections[i].ipAddr, "127.0.0.%d", i);
+      connections[i].port = i*10;
+      connections[i].role = 0;
+      connections[i].latency = 4;
+      connections[i].gain = 0;
+      connections[i].slot = i;
+   }
+
+   PopulateUiWithSessionInfo();
 }
 
 void PopulateSlotInfoForSession(const char * sessionName)
@@ -329,43 +367,25 @@ void PopulateSessionInfo(int session)
    else
    {
       puts("The session number is out of range.");
+      PopulateNewSession();
    }
 }
 
 BLYNK_WRITE(SESSION_DROP_DOWN) // Sessions Book
 {
    int i;
-   int user = param.asInt();
+   int session = param.asInt();
    char label[] = "Connection 1";
 
    printf("Got a new selection from the session list: %d \r\n", param.asInt());
 
-   if (user == 1)
+   if (session == 1)
    {
-      for (i=0; i<TOTAL_SLOTS; i++) {
-         sprintf(connections[i].name, "User %d", i);
-         connections[i].ipAddr[0] = 0;
-         connections[i].port = i*10;
-         connections[i].role = 0;
-         connections[i].latency = 4;
-         connections[i].gain = 0;
-
-         Blynk.virtualWrite(roleButton[i], LOW);
-         Blynk.syncVirtual(roleButton[i]);
-         Blynk.setProperty(roleButton[i], "label", "");
-
-         Blynk.virtualWrite(editButton[i], LOW);
-         Blynk.syncVirtual(editButton[i]);
-         sprintf(label, "Connection %d", i);
-         Blynk.setProperty(editButton[i], "label", label);
-
-         Blynk.virtualWrite(latencySlider[i], 4);
-         Blynk.syncVirtual(latencySlider[i]);
-      }
+      PopulateNewSession();
    }
    else
    {
-      PopulateSessionInfo(user-2);
+      PopulateSessionInfo(session-2);
    }
 }
 
@@ -834,12 +854,22 @@ BLYNK_WRITE(SLOT3_GAIN_SLIDER)  // slot2 Gain slider
    GainSliderChanged(2, param[0].asInt());
 }
 
+void ClearEditBoxes() {
+   Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX,"label"," ");  //clear left edit field label
+   Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,"\r");         //clear left edit field data
+   Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX,"label"," ");  //clear right edit field label
+   Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"\r");        //clear right edit field data
+   editMode = EditMode_Idle;
+}
+
 BLYNK_WRITE(LEFT_EDIT_FIELD_TEXT_BOX) //Left edit field
 {
 	//check currently active edit button, if none are active do nothing, if 'save session' is active do nothing
 	//for the 3 slot edit buttons, write the new name, somthing like the next 2 lines only slot dependent?
-	strcpy(connections[slotBeingEdited].name, param[0].asStr());  //write new user name for active slot
-	Blynk.setProperty(connectButton[slotBeingEdited], "label", connections[slotBeingEdited].name); // Write user name as label to connect button for active slot
+   if (editMode == EditMode_Connection) {
+      strcpy(connections[slotBeingEdited].name, param[0].asStr());  //write new user name for active slot
+      Blynk.setProperty(connectButton[slotBeingEdited], "label", connections[slotBeingEdited].name); // Write user name as label to connect button for active slot
+   }
 }
 
 BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
@@ -847,22 +877,26 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
    char *p;
    char buf[64];
 
-   strcpy(buf, param[0].asStr());
+   if (editMode == EditMode_Connection) {
+      strcpy(buf, param[0].asStr());
 
-   // find name
-   p = strtok(buf, ":");
-   if (p == NULL) return;
-   SetSlotIpAddress(slotBeingEdited, p);
+      // find name
+      p = strtok(buf, ":");
+      if (p == NULL) return;
+      SetSlotIpAddress(slotBeingEdited, p);
 
-   p = strtok(NULL, ":");
-   if (p == NULL) return;
-   //strcpy(connections[slotBeingEdited].port, p);
-   connections[slotBeingEdited].port = strtol(p, NULL, 10);
-   strcpy(connectionParams[slotBeingEdited].clientIP, p);
+      p = strtok(NULL, ":");
+      if (p == NULL) return;
+      //strcpy(connections[slotBeingEdited].port, p);
+      connections[slotBeingEdited].port = strtol(p, NULL, 10);
+      strcpy(connectionParams[slotBeingEdited].clientIP, p);
 
-   sprintf(buf, "%s:%d", connections[slotBeingEdited].ipAddr, connections[slotBeingEdited].port);
+      sprintf(buf, "%s:%d", connections[slotBeingEdited].ipAddr, connections[slotBeingEdited].port);
 
-   Blynk.setProperty(roleButton[slotBeingEdited], "label", buf);
+      Blynk.setProperty(roleButton[slotBeingEdited], "label", buf);
+   } else if (editMode == EditMode_Session) {
+      strcpy(sessionInfo.name, param[0].asStr());
+   }
 }
 
 static void EditButtonClicked(int slot, int state)
@@ -882,6 +916,8 @@ static void EditButtonClicked(int slot, int state)
       }
       Blynk.virtualWrite(SESSION_SAVE_BUTTON, LOW);
 
+      editMode = EditMode_Connection;
+
 		//Store this button as the currently active edit button
       sprintf(msg, "NAME Connection %d", slot+1);
 		Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX, "label", msg);  //Populate the label for the left edit field
@@ -893,11 +929,7 @@ static void EditButtonClicked(int slot, int state)
    }
    else
    {
-		Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX,"label"," ");  //clear left edit field label
-		Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,"\r");         //clear left edit field data
-		Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX,"label"," ");  //clear right edit field label
-		Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"\r");        //clear right edit field data
-		//clear currently active edit button
+      ClearEditBoxes();
    }
 }
 
@@ -930,6 +962,36 @@ BLYNK_WRITE(MONITOR_GAIN_SLIDER)  // Monitor Gain slider
 	}	
 }
 
+BLYNK_WRITE(SESSION_SAVE_BUTTON)
+{
+   int i;
+   char buf[64];
+
+   if(param[0])
+   {
+      for(i=0; i<TOTAL_SLOTS; i++) 
+      {
+         Blynk.virtualWrite(editButton[i], LOW);
+      }
+
+      editMode = EditMode_Session;
+
+		Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX, "label", "Save session info");
+		Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, "Edit name, tap Session");
+
+		Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "Session Name");
+		Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, sessionInfo.name);
+   }
+   else
+   {
+      // TODO: save info
+      SaveAllSessionInfo(&sessionInfo, connections);
+
+      // reset edit info
+      Blynk.virtualWrite(SESSION_SAVE_BUTTON, LOW);
+      ClearEditBoxes();
+   }
+}
 
 void setup()
 {

@@ -8,6 +8,7 @@ typedef struct ConnectionInfo_T {
    int role; 
    int latency;
    int gain;
+   int slot;
 } ConnectionInfo_T;
 
 typedef struct SessionInfo_T {

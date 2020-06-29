@@ -160,7 +160,6 @@ static void PopulateSessionDropDown() {
       name = GetNextSessionName();
    }
 
-   puts("----> Setting labels for session drop down.");
    Blynk.setProperty(SESSION_DROP_DOWN, "labels", labels);
 }
 
@@ -309,10 +308,8 @@ void PopulateNewSession()
 
 void PopulateSlotInfoForSession(const char * sessionName)
 {
-   puts("\r\n---> Getting all session info...");
    if(0 == GetAllSessionInfo(sessionName, &sessionInfo, connections))
    {
-      puts("---> ...got all session info\r\n");
       PopulateUiWithSessionInfo();
    }
    else
@@ -333,7 +330,7 @@ void PopulateSessionInfo(int session)
    }
    else
    {
-      puts("The session number is out of range.");
+      puts("ERROR: The session number is out of range.");
       PopulateNewSession();
    }
 }
@@ -343,8 +340,6 @@ BLYNK_WRITE(SESSION_DROP_DOWN) // Sessions Book
    int i;
    int session = param.asInt();
    char label[] = "Connection 1";
-
-   printf("Got a new selection from the session list: %d \r\n", param.asInt());
 
    if (session == 1)
    {
@@ -373,7 +368,7 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
          sprintf(sampleRate,"96000");
          break;
       default:
-         printf("Unknown item selected \r\n");
+         printf("Unknown sample rate selected \r\n");
    }
    printf("%s \r\n",sampleRate);
    KillAllSlots();
@@ -576,7 +571,7 @@ BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
 
          break;
       default:
-         printf("Unknown item selected \r\n");
+         printf("Unknown sound card selected \r\n");
    }
 }
 

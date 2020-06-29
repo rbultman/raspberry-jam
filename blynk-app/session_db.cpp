@@ -32,7 +32,7 @@ const unsigned char * GetFirstSessionName() {
 
    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
    if (SQLITE_OK != rc) {
-      puts("Some error occurred.");
+      puts("Some error occurred preparing the statement.");
    } else {
       name = GetNextSessionName();
    }
@@ -65,25 +65,18 @@ static int SessionCallback(void *data, int argc, char **argv, char **azColName){
    for(i = 0; i<argc; i++){
       if (0 == strcmp("name", azColName[i])) {
          strcpy(pSessionInfo->name, argv[i]);
-         printf("Session name: %s\r\n", pSessionInfo->name);
       } else if (0 == strcmp("inputLevel", azColName[i])) {
          pSessionInfo->inputLevel = strtol(argv[i], NULL, 10);
-         printf("Input Level: %d\r\n", pSessionInfo->inputLevel);
       } else if (0 == strcmp("outputLevel", azColName[i])) {
          pSessionInfo->outputLevel = strtol(argv[i], NULL, 10);
-         printf("Output Level: %d\r\n", pSessionInfo->outputLevel);
       } else if (0 == strcmp("sampleRate", azColName[i])) {
          pSessionInfo->sampleRate = strtol(argv[i], NULL, 10);
-         printf("Sample Rate: %d\r\n", pSessionInfo->sampleRate);
       } else if (0 == strcmp("monitorGain", azColName[i])) {
          pSessionInfo->monitorGain = strtol(argv[i], NULL, 10);
-         printf("Monitor Gain: %d\r\n", pSessionInfo->monitorGain);
       } else if (0 == strcmp("inputSelect", azColName[i])) {
          pSessionInfo->inputSelect = strtol(argv[i], NULL, 10);
-         printf("Input Select: %d\r\n", pSessionInfo->inputSelect);
       } else if (0 == strcmp("micBoost", azColName[i])) {
          pSessionInfo->micBoost = strtol(argv[i], NULL, 10);
-         printf("Mic Boost: %d\r\n", pSessionInfo->micBoost);
       } else {
          printf("ERROR: Unknown column name: <%s>\r\n", azColName[i]);
          return 1;
@@ -137,27 +130,19 @@ static int ConnectionCallback(void *data, int argc, char **argv, char **azColNam
    for(i = 0; i<argc; i++){
       if (0 == strcmp("name", azColName[i])) {
          strcpy(pConnection[connectionIndex].name, argv[i]);
-         printf("Connection name: %s\r\n", pConnection[connectionIndex].name);
       } else if (0 == strcmp("ipAddr", azColName[i])) {
          strcpy(pConnection[connectionIndex].ipAddr, argv[i]);
-         printf("IP Address: %s\r\n", pConnection[connectionIndex].ipAddr);
       } else if (0 == strcmp("port", azColName[i])) {
          pConnection[connectionIndex].port = strtol(argv[i], NULL, 10);
-         printf("Port: %d\r\n", pConnection[connectionIndex].port);
       } else if (0 == strcmp("role", azColName[i])) {
          pConnection[connectionIndex].role = strtol(argv[i], NULL, 10);
-         printf("Role: %d\r\n", pConnection[connectionIndex].role);
       } else if (0 == strcmp("latency", azColName[i])) {
          pConnection[connectionIndex].latency = strtol(argv[i], NULL, 10);
-         printf("Latency: %d\r\n", pConnection[connectionIndex].latency);
       } else if (0 == strcmp("gain", azColName[i])) {
          pConnection[connectionIndex].gain = strtol(argv[i], NULL, 10);
-         printf("Gain: %d\r\n", pConnection[connectionIndex].gain);
       } else if (0 == strcmp("slot", azColName[i])) {
          pConnection[connectionIndex].slot = strtol(argv[i], NULL, 10);
-         printf("Slot: %s\r\n", argv[i]);
       } else if (0 == strcmp("session_name", azColName[i])) {
-         printf("Session: %s\r\n", argv[i]);
       } else {
          printf("ERROR: Unknown connection column name: <%s>\r\n", azColName[i]);
          return 1;

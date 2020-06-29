@@ -952,7 +952,6 @@ bool longPressDetected = false;
 
 void EnterDeleteSessionState(void *notused)
 {
-   puts("Long press detected.");
    tmr.deleteTimer(longPressTimer);
 
    longPressDetected  = true;
@@ -960,7 +959,6 @@ void EnterDeleteSessionState(void *notused)
    switch(editMode) {
       case EditMode_Session:
          editMode = EditMode_DeleteSession;
-         puts("In delete mode.");
          Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX, "label", "Delte session info");
          Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, "Tap Session to abort");
 
@@ -969,7 +967,6 @@ void EnterDeleteSessionState(void *notused)
          break;
 
       case EditMode_DeleteSession:
-         puts("Deleting session");
          ClearEditBoxes();
          DeleteSessionInfo(sessionInfo.name);
          PopulateSessionDropDown();
@@ -986,7 +983,6 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
 
    if(param[0])
    {
-      puts("Button pressed.");
       longPressTimer = tmr.setTimeout(longPressMillis, EnterDeleteSessionState, NULL);
 
       if (editMode == EditMode_DeleteSession) {
@@ -1006,10 +1002,8 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
 
          for(i=0; i<sessionNames.size(); i++)
          {
-            printf("Comparing %s to %s\r\n", sessionNames[i], buf);
             if (strcmp(sessionNames[i], buf) == 0)
             {
-               printf("Trying to set the drop down to %d\r\n", i+2);
                Blynk.virtualWrite(SESSION_DROP_DOWN, i+2);
                break;
             }
@@ -1034,23 +1028,15 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
    else
    {
       tmr.deleteTimer(longPressTimer);
-      puts("Button released.");
       if (longPressDetected)
       {
-         puts("Clearing the long pressed variable");
          longPressDetected = false;
       }
       else
       {
-         puts("The long pressed variable as false");
          if (editMode == EditMode_DeleteSession)
          {
-            puts("Aborting delete.");
             ClearEditBoxes();
-         }
-         else
-         {
-            puts("Edit mode is not deleting, so not going to do anything");
          }
       }
    }

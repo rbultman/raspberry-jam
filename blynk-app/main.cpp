@@ -832,6 +832,7 @@ BLYNK_WRITE(LEFT_EDIT_FIELD_TEXT_BOX) //Left edit field
 	//for the 3 slot edit buttons, write the new name, somthing like the next 2 lines only slot dependent?
    if (editMode == EditMode_Connection) {
       strcpy(connections[slotBeingEdited].name, param[0].asStr());  //write new user name for active slot
+      TrimWhitespace(connections[slotBeingEdited].name);
       Blynk.setProperty(connectButton[slotBeingEdited], "label", connections[slotBeingEdited].name); // Write user name as label to connect button for active slot
    }
 }
@@ -844,6 +845,8 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
 
    if (editMode == EditMode_Connection) {
       strcpy(buf, param[0].asStr());
+
+      TrimWhitespace(buf);
 
       // find name
       p = strtok(buf, ":");
@@ -861,20 +864,9 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) //Left edit field
       Blynk.setProperty(roleButton[slotBeingEdited], "label", buf);
    } else if (editMode == EditMode_Session) {
       // get it
-      strcpy(buf, param[0].asStr());
-      // strip leading whitepace
-      p = &buf[0];
-      while (isspace(*p)) p++;
-      // copy remaining
-      strcpy(sessionInfo.name, p);
-      // trim trailing white space
-      for(i=strlen(sessionInfo.name)-1; i>0; i--) {
-         if(isspace(sessionInfo.name[i])) {
-            sessionInfo.name[i] = 0;
-         } else {
-            break;
-         }
-      }
+      strcpy(sessionInfo.name, param[0].asStr());
+      TrimWhitespace(sessionInfo.name);
+
       printf("Session name is now: \r\n");
       printf("<%s>\r\n", sessionInfo.name);
    }

@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <time.h>
+#include <ctype.h>
+#include <string.h>
 
 int checkIpFormat(const char *ip) {
    uint16_t quad[4];
@@ -35,5 +37,26 @@ void sleep_millis(int millis)
    req.tv_sec = 0;
    req.tv_nsec = millis * 1000000L;
    nanosleep(&req, (struct timespec *)NULL);
+}
+
+void TrimWhitespace(char *pBuf)
+{
+   char *p = pBuf;
+   int i;
+
+   // strip leading whitepace
+   while (isspace(*p)) p++;
+
+   // copy remaining
+   strcpy(pBuf, p);
+
+   // trim trailing white space
+   for(i=strlen(pBuf)-1; i>0; i--) {
+      if(isspace(pBuf[i])) {
+         pBuf[i] = 0;
+      } else {
+         break;
+      }
+   }
 }
 

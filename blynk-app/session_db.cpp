@@ -133,7 +133,7 @@ static int ConnectionCallback(void *data, int argc, char **argv, char **azColNam
       } else if (0 == strcmp("ipAddr", azColName[i])) {
          strcpy(pConnection[connectionIndex].ipAddr, argv[i]);
       } else if (0 == strcmp("port", azColName[i])) {
-         pConnection[connectionIndex].port = strtol(argv[i], NULL, 10);
+         pConnection[connectionIndex].portOffset = strtol(argv[i], NULL, 10);
       } else if (0 == strcmp("role", azColName[i])) {
          pConnection[connectionIndex].role = strtol(argv[i], NULL, 10);
       } else if (0 == strcmp("latency", azColName[i])) {
@@ -219,7 +219,7 @@ static int SaveConnectionInfo(SessionInfo_T * pSessionInfo, ConnectionInfo_T * p
    for(i=0; i<MAX_CONNECTIONS; i++) {
       sprintf(sql, "REPLACE into connection(session_name, slot, name, ipAddr, port, role, latency, gain) " \
             "VALUES('%s', %d, '%s', '%s', %d, %d, %d, %d)", 
-            pSessionInfo->name, pConnections[i].slot, pConnections[i].name, pConnections[i].ipAddr, pConnections[i].port, 
+            pSessionInfo->name, pConnections[i].slot, pConnections[i].name, pConnections[i].ipAddr, pConnections[i].portOffset, 
             pConnections[i].role, pConnections[i].latency, pConnections[i].gain);
 
       /* Execute SQL statement */

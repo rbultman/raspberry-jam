@@ -4,7 +4,7 @@
 typedef struct ConnectionInfo_T {
    char name[64];
    char ipAddr[20];
-   int port;
+   int portOffset;
    int role; 
    int latency;
    int gain;

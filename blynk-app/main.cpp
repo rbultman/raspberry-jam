@@ -83,7 +83,6 @@ char mixCaptureCommand[32] = "amixer";
 char inputMicCommand[100] = "amixer ";
 char inputLineCommand[100] = "amixer ";
 char micGainCommand[50];
-char ecaCommand[100];
 char connectedSlots[64];
 int micGainIndex =0;
 bool audioInjector = false;
@@ -620,6 +619,7 @@ BLYNK_WRITE(MIC_GAIN) //Mic Gain
 
 void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input/output and gain control
 {
+   char ecaCommand[100];
 	
 	if (connectionParams[slot].isConnected)
 	{
@@ -653,7 +653,7 @@ void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input
 		}
 		eci_command("cop-add -eadb:0");  // add gain chain operator
 		sprintf(ecaCommand,"slot%d,",slot);
-		strcat(connectedSlots,ecaCommand);  //For each slot that is 'connected' add slot to connected slots
+		strcat(connectedSlots, ecaCommand);  //For each slot that is 'connected' add slot to connected slots
 		connectionParams[slot].volumeIsEnabled = true;
 		switch (slot)
 		{
@@ -675,6 +675,8 @@ void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input
 
 BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 {
+   char ecaCommand[100];
+   
 	printf("Got a value: %s\n", param[0].asStr());
 	uint8_t i;
 	if (param[0])
@@ -759,11 +761,13 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 }
 
 void SetGainFromSlider(int gain)   //Get gain from the slider widget, apply to the gain control in ecasound
-	{
-		sprintf(ecaCommand,"cop-set 1,1,%d",gain);
-		printf("Gain: %s\n",ecaCommand);
-		eci_command(ecaCommand);
-	}
+{
+   char ecaCommand[100];
+
+   sprintf(ecaCommand,"cop-set 1,1,%d",gain);
+   printf("Gain: %s\n",ecaCommand);
+   eci_command(ecaCommand);
+}
 
 void GainSliderChanged(int slider, int value)
 {

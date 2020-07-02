@@ -26,6 +26,8 @@
 #include "pinDefs.h"
 #include "sessionInfo.h"
 #include "utility.h"
+#include "fe-pi-def.h"
+#include "audio-injector-def.h"
 
 #define TOTAL_SLOTS 3
 
@@ -78,19 +80,15 @@ BlynkSocket Blynk(_blynkTransport);
 
 #include <BlynkWidgets.h>
 
-char mixMasterCommand[32] = "amixer ";
-char mixCaptureCommand[32] = "amixer";
-char inputMicCommand[100] = "amixer ";
-char inputLineCommand[100] = "amixer ";
-char micGainCommand[50];
 char connectedSlots[64];
-int micGainIndex =0;
-bool audioInjector = false;
 bool myVolumeIsEnabled = false;
 
 int longPressMillis = 2000;    // time in millis needed for longpress
 int longPressTimer;
-bool buttonState = false;
+
+FePi fePiCard;
+AudioInjector audioInjectorCard;
+SoundcardInterface *soundcard;
 
 static const char *rxBufferSize[] = {
    "2",
@@ -162,10 +160,10 @@ static void PopulateSessionDropDown() {
 BLYNK_CONNECTED() {
    int i;
 
+   Blynk.syncVirtual(SOUNDCARD); //sync Soundcard selection
    Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
    Blynk.syncVirtual(INPUT_LEVEL); //sync input level on connection
    Blynk.syncVirtual(OUTPUT_LEVEL); //sync output level on connection
-   Blynk.syncVirtual(SOUNDCARD); //sync Soundcard selection
    Blynk.syncVirtual(INPUT_SELECT); //sync Input selection
 
    for (i=0; i<TOTAL_SLOTS; i++) {
@@ -189,30 +187,44 @@ BLYNK_CONNECTED() {
 
 BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
 {
-   char mixCommand[100] = "amixer";
+   char mixCommand[100];
 
+   if (soundcard == NULL)
+   {
+      puts("Can't set output level, soundcard is not initialized.");
+      return;
+   }
+   
    sessionInfo.outputLevel = param[0].asInt();
 
    printf("New output level: %s\n", param[0].asStr());
-   sprintf(mixCommand, "amixer -M set %s %s%%", mixMasterCommand, param[0].asStr());
+   sprintf(mixCommand, "amixer -M set %s %s%%", soundcard->mixMasterCommand, param[0].asStr());
    printf("%s\r\n",mixCommand);
    system(mixCommand);
 }
 
 BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
 {
-   char mixCommand[100] = "amixer";
+   char mixCommand[100];
+   
+   if (soundcard == NULL)
+   {
+      puts("Can't set input level, soundcard is not initialized.");
+      return;
+   }
    
    sessionInfo.inputLevel = param[0].asInt();
 
    printf("New input level: %s\n", param[0].asStr());
-   sprintf(mixCommand, "amixer -M set %s %s%%", mixCaptureCommand, param[0].asStr());
+   sprintf(mixCommand, "amixer -M set %s %s%%", soundcard->mixCaptureCommand, param[0].asStr());
    printf("%s\r\n",mixCommand);
    system(mixCommand);
 }
 
 static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
 {
+   printf("Latency set for slot %d\r\n", slot);
+
    if (latency >= BUFFER_SIZE_COUNT) {
       printf("Buffer size index out of range.\r\n");
    } else {
@@ -270,7 +282,7 @@ void PopulateUiWithSessionInfo()
    Blynk.syncVirtual(INPUT_LEVEL);
    Blynk.virtualWrite(OUTPUT_LEVEL, sessionInfo.outputLevel);
    Blynk.syncVirtual(OUTPUT_LEVEL);
-   Blynk.virtualWrite(SAMPLE_RATE, sessionInfo.sampleRate);
+   Blynk.virtualWrite(SAMPLE_RATE, sessionInfo.sampleRate+1);
    Blynk.syncVirtual(SAMPLE_RATE);
    Blynk.virtualWrite(MONITOR_GAIN_SLIDER, sessionInfo.monitorGain);
    Blynk.syncVirtual(MONITOR_GAIN_SLIDER);
@@ -338,7 +350,8 @@ BLYNK_WRITE(SESSION_DROP_DOWN) // Sessions Book
 {
    int i;
    int session = param.asInt();
-   char label[] = "Connection 1";
+
+   puts("A session is selected.");
 
    if (session == 1)
    {
@@ -371,6 +384,8 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
    KillAllSlots();
    sprintf(jackCommand,"sh start_jack.sh -r%s &", sampleRate[sessionInfo.sampleRate]);
    system(jackCommand);	
+
+   puts("Exiting sample rate write");
 }
 
 void OpenSlot(int slot)
@@ -426,6 +441,8 @@ void DisconnectSlot(void *pSlot)
 
 void ConnectSlot(int slot, int pressed)
 {
+   printf("Connecting slot %d\r\n", slot);
+
    if (pressed)
    {
       KillSlot(slot);
@@ -442,7 +459,6 @@ BLYNK_WRITE(SLOT1_START_BUTTON ) //Connection 1 Connect button
 {
    ConnectSlot(0, param[0].asInt());
 }
-
 
 BLYNK_WRITE(SLOT2_START_BUTTON) //Connection 2 Connect button
 {
@@ -516,32 +532,34 @@ BLYNK_WRITE(SLOT3_ROLE_BUTTON) //Connection 3 Connection Type
 
 BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
 {
+   printf("Sound card selection: %d\r\n", param.asInt());
    switch (param.asInt())
    {
       case 1: // Audio Injector Stereo
-         system("amixer set 'Output Mixer HiFi' on");
-         sprintf(inputMicCommand,"amixer set 'Input Mux' 'Mic' && amixer set 'Mic' cap && amixer set 'Line' nocap");
-         sprintf(inputLineCommand,"amixer set 'Input Mux' 'Line In' && amixer set 'Line' cap && amixer set 'Mic' nocap");
-         sprintf(mixMasterCommand,"'Master'");
-         sprintf(mixCaptureCommand,"'Capture'");
-         sprintf(micGainCommand,"amixer set 'Mic Boost' ");
-         audioInjector=true;
-		 system("sudo rm /boot/soundcard.txt");
-		 system("sudo bash -c \"echo 'dtoverlay=audioinjector-wm8731-audio' >> /boot/soundcard.txt\"");
+         audioInjectorCard.Initialize();
+         soundcard = &audioInjectorCard;
+         // system("amixer set 'Output Mixer HiFi' on");
+         // sprintf(inputMicCommand,"amixer set 'Input Mux' 'Mic' && amixer set 'Mic' cap && amixer set 'Line' nocap");
+         // sprintf(inputLineCommand,"amixer set 'Input Mux' 'Line In' && amixer set 'Line' cap && amixer set 'Mic' nocap");
+         // sprintf(mixMasterCommand,"'Master'");
+         // sprintf(mixCaptureCommand,"'Capture'");
+         // sprintf(micGainCommand,"amixer set 'Mic Boost' ");
+         // system("sudo rm /boot/soundcard.txt");
+         // system("sudo bash -c \"echo 'dtoverlay=audioinjector-wm8731-audio' >> /boot/soundcard.txt\"");
          break;
       case 2: // Fe-Pi
-         audioInjector=false;
-         system("amixer -M set 'Lineout' 100%");
-         system("amixer -M set 'Headphone' 100%");
-         system("amixer set 'Headphone Mux' 'DAC'");
-         sprintf(inputMicCommand,"amixer set 'Capture Mux' 'MIC_IN'");
-         sprintf(inputLineCommand,"amixer set 'Capture Mux' 'LINE_IN'");
-         sprintf(mixMasterCommand,"'PCM'");
-         sprintf(mixCaptureCommand,"'Capture'");
-         sprintf(micGainCommand,"amixer set 'Mic' ");
-		 system("sudo rm /boot/soundcard.txt");
-		 system("sudo bash -c \"echo 'dtoverlay=fe-pi-audio' >> /boot/soundcard.txt\"");
-		 
+         fePiCard.Initialize();
+         soundcard = &fePiCard;
+         // system("amixer -M set 'Lineout' 100%");
+         // system("amixer -M set 'Headphone' 100%");
+         // system("amixer set 'Headphone Mux' 'DAC'");
+         // sprintf(inputMicCommand,"amixer set 'Capture Mux' 'MIC_IN'");
+         // sprintf(inputLineCommand,"amixer set 'Capture Mux' 'LINE_IN'");
+         // sprintf(mixMasterCommand,"'PCM'");
+         // sprintf(mixCaptureCommand,"'Capture'");
+         // sprintf(micGainCommand,"amixer set 'Mic' ");
+         // system("sudo rm /boot/soundcard.txt");
+         // system("sudo bash -c \"echo 'dtoverlay=fe-pi-audio' >> /boot/soundcard.txt\"");
          break;
       case 3: // Hifiberry DAC +ADC
 		 system("sudo rm /boot/soundcard.txt");
@@ -549,71 +567,55 @@ BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
 
          break;
       default:
+         soundcard = NULL;
          printf("Unknown sound card selected \r\n");
    }
 }
 
 BLYNK_WRITE(INPUT_SELECT) //Input Selection
 {
+
+   if (soundcard == NULL)
+   {
+      puts("Can't change the input source, soundcard is not initialized.");
+      return;
+   }
+
    printf("New input selected: %s\n", param[0].asStr());
    sessionInfo.inputSelect = param[0];
+
    if (param[0])
    {
-      system(inputMicCommand);
+      system(soundcard->inputMicCommand);
    }
    else
    {
-      system(inputLineCommand);
+      system(soundcard->inputLineCommand);
    }
 }
 
 BLYNK_WRITE(MIC_GAIN) //Mic Gain
 {
-   char mixCommand[100] = "amixer";
+   char mixCommand[100];
 
-   printf("Mic gain changed: %s\n", param[0].asStr());
+   if (soundcard == NULL)
+   {
+      puts("Can't change the mic gain, soundcard is not initialized.");
+      return;
+   }
+
    if (param[0])
    {
-      micGainIndex++;
-      switch (micGainIndex)
+      sessionInfo.micBoost++;
+      if (sessionInfo.micBoost >= soundcard->micGainSettingsCount)
       {
-         case 1: // +20dB
-            Blynk.setProperty(MIC_GAIN,"offLabel", "+20dB");
-            sprintf(mixCommand,"%s %u",micGainCommand,micGainIndex);
-            printf("%s\r\n",mixCommand);
-            system(mixCommand);
-            break;
-         case 2: // +30dB
-            if (audioInjector) 
-            {
-               micGainIndex=0;
-               Blynk.setProperty(MIC_GAIN,"offLabel", "0dB");
-            }
-            else
-            {	
-               Blynk.setProperty(MIC_GAIN,"offLabel", "+30dB");
-            }
-            sprintf(mixCommand,"%s %u",micGainCommand,micGainIndex);
-            printf("%s\r\n",mixCommand);
-            system(mixCommand);
-            break;
-         case 3: // +40dB
-            Blynk.setProperty(MIC_GAIN,"offLabel", "+40dB");
-            sprintf(mixCommand,"%s %u",micGainCommand,micGainIndex);
-            printf("%s\r\n",mixCommand);
-            system(mixCommand);
-            break;
-         case 4: // Reset to 0 dB
-            Blynk.setProperty(MIC_GAIN,"offLabel", "0dB");
-            micGainIndex=0;
-            sprintf(mixCommand,"%s %u",micGainCommand,micGainIndex);
-            printf("%s\r\n",mixCommand);
-            system(mixCommand);
-            break;
-         default:
-            printf("Unknown item selected \r\n");
+         sessionInfo.micBoost = 0;
       }
-      sessionInfo.micBoost = micGainIndex;
+
+      Blynk.setProperty(MIC_GAIN,"offLabel", soundcard->micGainText[sessionInfo.micBoost]);
+      sprintf(mixCommand, "%s %u", soundcard->micGainCommand, sessionInfo.micBoost);
+      printf("Mic gain command: %s\r\n", mixCommand);
+      system(mixCommand);
    }
 }
 
@@ -677,7 +679,7 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 {
    char ecaCommand[100];
    
-	printf("Got a value: %s\n", param[0].asStr());
+	printf("Routing button selected: %s\n", param[0].asStr());
 	uint8_t i;
 	if (param[0])
 	{
@@ -773,6 +775,8 @@ void GainSliderChanged(int slider, int value)
 {
    char msg[32];
 
+   printf("Gain changed for slider %d\r\n", slider);
+
 	if (connectionParams[slider].volumeIsEnabled)  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
 	{
       sprintf(msg, "c-select slot%d", slider);
@@ -861,6 +865,8 @@ static void EditButtonClicked(int slot, int state)
    char msg[32];
    int i;
 
+   printf("Slot %d edit button clicked.\r\n", slot);
+
    if (state)
    {
       slotBeingEdited = slot;
@@ -907,6 +913,8 @@ BLYNK_WRITE(SLOT3_EDIT_BUTTON) //Connection 1 Edit button
 
 BLYNK_WRITE(MONITOR_GAIN_SLIDER)  // Monitor Gain slider
 {
+   puts("Monitor gain slider changed.");
+
 	if (myVolumeIsEnabled)  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
 	{
 		eci_command("c-select self");

@@ -45,10 +45,8 @@ else
 	LDFLAGS += -s
 endif
 
-ifeq ($(target),raspberry)
-	CXXFLAGS += -DRASPBERRY -lecasoundc
-	LDFLAGS += -lwiringPi
-endif
+CXXFLAGS += -DRASPBERRY -lecasoundc
+LDFLAGS += -lwiringPi
 
 SOURCES=main.cpp \
 	session_db.cpp \

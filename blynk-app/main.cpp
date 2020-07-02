@@ -80,7 +80,6 @@ BlynkSocket Blynk(_blynkTransport);
 
 char mixMasterCommand[32] = "amixer ";
 char mixCaptureCommand[32] = "amixer";
-char mixCommand[100] = "amixer";
 char inputMicCommand[100] = "amixer ";
 char inputLineCommand[100] = "amixer ";
 char micGainCommand[50];
@@ -191,6 +190,8 @@ BLYNK_CONNECTED() {
 
 BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
 {
+   char mixCommand[100] = "amixer";
+
    sessionInfo.outputLevel = param[0].asInt();
 
    printf("New output level: %s\n", param[0].asStr());
@@ -201,6 +202,8 @@ BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
 
 BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
 {
+   char mixCommand[100] = "amixer";
+   
    sessionInfo.inputLevel = param[0].asInt();
 
    printf("New input level: %s\n", param[0].asStr());
@@ -567,6 +570,8 @@ BLYNK_WRITE(INPUT_SELECT) //Input Selection
 
 BLYNK_WRITE(MIC_GAIN) //Mic Gain
 {
+   char mixCommand[100] = "amixer";
+
    printf("Mic gain changed: %s\n", param[0].asStr());
    if (param[0])
    {

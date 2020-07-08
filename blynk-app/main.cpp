@@ -609,57 +609,67 @@ BLYNK_WRITE(MIC_GAIN) //Mic Gain
 
 void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input/output and gain control
 {
-   char ecaCommand[100];
+  char ecaCommand[100];
+
+  if (slot >= TOTAL_SLOTS)
+  {
+    printf("ERROR: slot out of range in EcaConnect: %d\r\n", slot);
+    return;
+  }
 	
 	if (connectionParams[slot].isConnected)
 	{
-		sprintf(ecaCommand,"c-add slot%d",slot);  //Add a chain for the slot
+    //Add a chain for the slot
+		sprintf(ecaCommand,"c-add slot%d",slot);  
 		printf("%s\r\n",ecaCommand);
 		eci_command(ecaCommand);
-		sprintf(ecaCommand,"c-select slot%d",slot);  //select chain
-		eci_command(ecaCommand);
+
+		//select chain
+    sprintf(ecaCommand,"c-select slot%d",slot);
 		printf("%s\r\n",ecaCommand);
-		sprintf(ecaCommand,"cs-set-audio-format 32,1,%s", sampleRate[sessionInfo.sampleRate]);  //set audio format
 		eci_command(ecaCommand);
+
+    //set audio format
+		sprintf(ecaCommand,"cs-set-audio-format 32,1,%s", sampleRate[sessionInfo.sampleRate]);  
 		printf("%s\r\n",ecaCommand);
+		eci_command(ecaCommand);
+
+    // Disconnect jack, let ecasound handle
 		if (connections[slot].role==0)   //If this slot is a server
 		{	
-			sprintf(ecaCommand,"ai-add jack,slot%d",slot);  //Connect receive from slot to Ecasound chain
+      //Connect receive from slot to Ecasound chain
+			sprintf(ecaCommand,"ai-add jack,slot%d",slot);  
+      printf("%s\r\n",ecaCommand);
 			eci_command(ecaCommand);
-			printf("%s\r\n",ecaCommand);
-         //Disconnect jacktrip from system playback since connection is now to Ecasound
+
+      //Disconnect jacktrip from system playback since connection is now to Ecasound
 			sprintf(ecaCommand,"jack_disconnect system:playback_1 slot%d:receive_1",slot);  
+      printf("%s\r\n",ecaCommand);
 			system(ecaCommand);
 		}
 		else  //If this slot is a client
 		{
-			sprintf(ecaCommand,"ai-add jack,%s",connections[slot].ipAddr); //Connect receive from slot to Ecasound chain
+      //Connect receive from slot to Ecasound chain
+			sprintf(ecaCommand,"ai-add jack,%s",connections[slot].ipAddr); 
 			printf("%s\r\n",ecaCommand);
 			eci_command(ecaCommand);
-			printf("%s\r\n",ecaCommand);
-         //Disconnect jacktrip from system playback since connection is now to Ecasound
+
+      //Disconnect jacktrip from system playback since connection is now to Ecasound
 			sprintf(ecaCommand,"jack_disconnect system:playback_1 %s:receive_1",connections[slot].ipAddr); 
+			printf("%s\r\n",ecaCommand);
 			system(ecaCommand);			
 		}
-		eci_command("cop-add -eadb:0");  // add gain chain operator
-		sprintf(ecaCommand,"slot%d,",slot);
-		strcat(connectedSlots, ecaCommand);  //For each slot that is 'connected' add slot to connected slots
-		connectionParams[slot].volumeIsEnabled = true;
-		switch (slot)
-		{
-		case 0:
-			Blynk.virtualWrite(SLOT1_GAIN_SLIDER, 0);
-			break;
-		case 1:
-			Blynk.virtualWrite(SLOT2_GAIN_SLIDER, 0);
-			break;
-		case 2:
-			Blynk.virtualWrite(SLOT3_GAIN_SLIDER, 0);
-			break;
-		default:
-			break;
-		}
 
+      // add gain chain operator
+		eci_command("cop-add -eadb:0");
+
+    //For each slot that is 'connected' add slot to connected slots
+		sprintf(ecaCommand,"slot%d,",slot);
+		strcat(connectedSlots, ecaCommand);  
+		connectionParams[slot].volumeIsEnabled = true;
+
+    // set this slot's gain slider
+    Blynk.virtualWrite(gainSlider[slot], 0);
 	}
 }
 

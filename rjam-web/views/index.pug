@@ -4,12 +4,10 @@ block content
   form(action="." method="POST")
     div(class="form-group")
       h1="Welcome to the Raspberry Jam Configurator"
+      p Configure the fields below and then click the Save button.
 
-    div(class="form-group")
-      p(class="lead")="Enter your Blynk token below and click 'Submit'"
-
-    div(class="form-group")
-      label(for="blynkToken") Blynk Token
+    div.form-group
+      label(for="blynkToken") Enter Your Blynk Token
       input(
         type="text"
         id="blynkToken"
@@ -18,4 +16,14 @@ block content
         class="form-control"
       )
 
-    input(class="btn btn-primary" type="submit" value="Submit")
+    div.form-group
+      label(for="cardSelect") Select Sound Card
+      select(class="form-control" id="cardSelect" name="cardSelect")
+        - var selectedCardIndex = selectedCardId - 1;
+        each card, index in cards
+          if index == selectedCardIndex
+            option(selected="selected")= card
+          else 
+            option= card
+
+    input(class="btn btn-primary" type="submit" value="Save")

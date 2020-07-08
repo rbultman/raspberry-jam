@@ -1,5 +1,6 @@
+//jshint esversion: 8
 var fs = require("fs");
-const filename = "../settings/blynk-token.txt"
+const filename = "../settings/blynk-token.txt";
 
 function get() {
   var token = "";

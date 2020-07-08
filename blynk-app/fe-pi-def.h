@@ -27,9 +27,6 @@ class FePi : public SoundcardInterface
          static const char * gains[] = {"0dB", "+20dB", "+30dB", "+40dB"};
          micGainSettingsCount = sizeof(gains)/sizeof(char *);
          micGainText = gains;
-
-         system("sudo rm /boot/soundcard.txt");
-         system("sudo bash -c \"echo 'dtoverlay=fe-pi-audio' >> /boot/soundcard.txt\"");
       };
 };
 

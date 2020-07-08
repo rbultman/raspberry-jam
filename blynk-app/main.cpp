@@ -724,9 +724,8 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 		
 		for (i=0; i<TOTAL_SLOTS; i++)  //Check each slot for a connection, and connect appropriate slots
 		{
-			printf("%d\r\n",i);
+			printf("Routing slot %d\r\n",i);
 			EcaConnect(i);
-			
 		}
 
 		sprintf(ecaCommand,"c-select %s",connectedSlots);  //Select the chains for all connected slots

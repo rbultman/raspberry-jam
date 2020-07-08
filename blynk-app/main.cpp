@@ -621,17 +621,17 @@ void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input
 	{
     //Add a chain for the slot
 		sprintf(ecaCommand,"c-add slot%d",slot);  
-		printf("%s\r\n",ecaCommand);
+		printf("===> Adding chain for slot command: %s\r\n",ecaCommand);
 		eci_command(ecaCommand);
 
 		//select chain
     sprintf(ecaCommand,"c-select slot%d",slot);
-		printf("%s\r\n",ecaCommand);
+		printf("===> Selecting chaing command:%s\r\n",ecaCommand);
 		eci_command(ecaCommand);
 
     //set audio format
 		sprintf(ecaCommand,"cs-set-audio-format 32,1,%s", sampleRate[sessionInfo.sampleRate]);  
-		printf("%s\r\n",ecaCommand);
+		printf("===> Setting audio format command: %s\r\n",ecaCommand);
 		eci_command(ecaCommand);
 
     // Disconnect jack, let ecasound handle
@@ -639,24 +639,24 @@ void EcaConnect(uint8_t slot)   //Sets up a connection in Ecasound with an input
 		{	
       //Connect receive from slot to Ecasound chain
 			sprintf(ecaCommand,"ai-add jack,slot%d",slot);  
-      printf("%s\r\n",ecaCommand);
+      printf("===> Connecting receive from slot to ecasound chain command: %s\r\n",ecaCommand);
 			eci_command(ecaCommand);
 
       //Disconnect jacktrip from system playback since connection is now to Ecasound
 			sprintf(ecaCommand,"jack_disconnect system:playback_1 slot%d:receive_1",slot);  
-      printf("%s\r\n",ecaCommand);
+      printf("===> Disconnecting jacktrip from system playback command: %s\r\n",ecaCommand);
 			system(ecaCommand);
 		}
 		else  //If this slot is a client
 		{
       //Connect receive from slot to Ecasound chain
 			sprintf(ecaCommand,"ai-add jack,%s",connections[slot].ipAddr); 
-			printf("%s\r\n",ecaCommand);
+			printf("===> Connecting receive from slot to ecasound chain command: %s\r\n",ecaCommand);
 			eci_command(ecaCommand);
 
       //Disconnect jacktrip from system playback since connection is now to Ecasound
 			sprintf(ecaCommand,"jack_disconnect system:playback_1 %s:receive_1",connections[slot].ipAddr); 
-			printf("%s\r\n",ecaCommand);
+			printf("===> Disconnecting jacktrip from system playback command: %s\r\n",ecaCommand);
 			system(ecaCommand);			
 		}
 

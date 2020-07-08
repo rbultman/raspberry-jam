@@ -5,7 +5,7 @@ block content
     div(class="form-group")
       h1="Welcome to the Raspberry Jam Configurator"
 
-    div(class="form-group")
+    div.form-group
       label(for="blynkToken") Enter Your Blynk Token
       input(
         type="text"
@@ -15,22 +15,14 @@ block content
         class="form-control"
       )
 
-    div(class="form-group")
-      label(for="soundcard") Select A Sound Card
-      input(
-        type="button"
-        id="soundCardButton"
-        name="blynkToken"
-        value=blynkToken
-        class="btn btn-secondary dropdown-toggle"
-	data-toggle="dropdown"
-	aria-haspopup="true" 
-	aria-expanded="false"
-      )
-      div(class="dropdown-menu" aria-labelledby="soundCardButton")
-        a(class="dropdown-item" href="#") Action
-        a(class="dropdown-item" href="#") Another action
-        a(class="dropdown-item" href="#") Something else here
+    div.form-group
+      label(for="dropdown") Select Sound Card
+      a.dropdown-toggle( href="#", data-toggle="dropdown", role="button", aria-expanded="false" ) Dropdown 
+        span.caret
+      ul.dropdown-menu( role="menu" )
+        li: a( href="#" ) Action
+        li: a( href="#" ) Another action
+        li: a( href="#" ) Something else here
 
     input(class="btn btn-primary" type="submit" value="Submit")
 

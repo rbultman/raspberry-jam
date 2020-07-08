@@ -28,6 +28,7 @@
 #include "utility.h"
 #include "fe-pi-def.h"
 #include "audio-injector-def.h"
+#include "settings.h"
 
 #define TOTAL_SLOTS 3
 
@@ -131,6 +132,7 @@ void SetSlotRole(uint8_t slot, uint8_t role);
 void KillSlot(int slot);
 void KillAllSlots();
 void OpenSlot(int slot);
+void initializeSoundCard();
 
 static void PopulateSessionDropDown() {
    int i;
@@ -160,7 +162,7 @@ static void PopulateSessionDropDown() {
 BLYNK_CONNECTED() {
    int i;
 
-   Blynk.syncVirtual(SOUNDCARD); //sync Soundcard selection
+   // Blynk.syncVirtual(SOUNDCARD); //sync Soundcard selection
    Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
    Blynk.syncVirtual(INPUT_LEVEL); //sync input level on connection
    Blynk.syncVirtual(OUTPUT_LEVEL); //sync output level on connection
@@ -530,36 +532,22 @@ BLYNK_WRITE(SLOT3_ROLE_BUTTON) //Connection 3 Connection Type
    SetSlotRole(2, param[0].asInt());
 }
 
-BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
+// BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
+void initializeSoundCard()
 {
-   printf("Sound card selection: %d\r\n", param.asInt());
-   switch (param.asInt())
+   int card = GetSelectedSoundcard();
+
+   printf("Sound card selection: %d\r\n", card);
+
+   switch (card)
    {
-      case 1: // Audio Injector Stereo
-         audioInjectorCard.Initialize();
-         soundcard = &audioInjectorCard;
-         // system("amixer set 'Output Mixer HiFi' on");
-         // sprintf(inputMicCommand,"amixer set 'Input Mux' 'Mic' && amixer set 'Mic' cap && amixer set 'Line' nocap");
-         // sprintf(inputLineCommand,"amixer set 'Input Mux' 'Line In' && amixer set 'Line' cap && amixer set 'Mic' nocap");
-         // sprintf(mixMasterCommand,"'Master'");
-         // sprintf(mixCaptureCommand,"'Capture'");
-         // sprintf(micGainCommand,"amixer set 'Mic Boost' ");
-         // system("sudo rm /boot/soundcard.txt");
-         // system("sudo bash -c \"echo 'dtoverlay=audioinjector-wm8731-audio' >> /boot/soundcard.txt\"");
-         break;
-      case 2: // Fe-Pi
+      case 1: // Fe-Pi
          fePiCard.Initialize();
          soundcard = &fePiCard;
-         // system("amixer -M set 'Lineout' 100%");
-         // system("amixer -M set 'Headphone' 100%");
-         // system("amixer set 'Headphone Mux' 'DAC'");
-         // sprintf(inputMicCommand,"amixer set 'Capture Mux' 'MIC_IN'");
-         // sprintf(inputLineCommand,"amixer set 'Capture Mux' 'LINE_IN'");
-         // sprintf(mixMasterCommand,"'PCM'");
-         // sprintf(mixCaptureCommand,"'Capture'");
-         // sprintf(micGainCommand,"amixer set 'Mic' ");
-         // system("sudo rm /boot/soundcard.txt");
-         // system("sudo bash -c \"echo 'dtoverlay=fe-pi-audio' >> /boot/soundcard.txt\"");
+         break;
+      case 2: // Audio Injector Stereo
+         audioInjectorCard.Initialize();
+         soundcard = &audioInjectorCard;
          break;
       case 3: // Hifiberry DAC +ADC
 		 system("sudo rm /boot/soundcard.txt");
@@ -1023,8 +1011,10 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
 
 void setup(const char *auth, const char *serv, uint16_t port)
 {
-   Blynk.begin(auth, serv, port);
+   initializeSoundCard();
    eci_init();	//Initialize Ecasound
+   Blynk.begin(auth, serv, port);
+
    tmr.setInterval(1000, [](){
          Blynk.virtualWrite(V0, BlynkMillis()/1000);
          });

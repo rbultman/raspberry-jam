@@ -1,6 +1,25 @@
 //jshint esversion: 8
 var sqlite3 = require('sqlite3');
 var sqlite = require('sqlite');
+const { exec } = require("child_process");
+
+function writeSoundCard(overlay) {
+  var command = "sudo bash -c \"echo 'dtoverlay=" + overlay + "' > /boot/soundcard.txt\"";
+
+  exec(command, (error, stdout, stderr) => {
+    if (error) {
+      console.log(`error: ${error.message}`);
+      return;
+    }
+    if (stderr) {
+      console.log(`stderr: ${stderr}`);
+      return;
+    }
+    console.log(`stdout: ${stdout}`);
+    console.log("Overlay written: " + overlay);
+  });
+}
+
 var open = sqlite.open;
 
 var db;
@@ -68,6 +87,7 @@ function setSelectedCard(card) {
   console.log("setSelectedCard called");
   console.log("Requested selection: " + card);
   updateSelectedCardInDatabase(card);
+  writeSoundCard(cards[card-1].overlay);
 }
 
 var interface = {

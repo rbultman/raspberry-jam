@@ -24,9 +24,6 @@ class AudioInjector : public SoundcardInterface
          static const char *gains[] = {"0dB", "+20dB"};
          micGainSettingsCount = sizeof(gains)/sizeof(char *);
          micGainText = gains;
-
-         system("sudo rm /boot/soundcard.txt");
-         system("sudo bash -c \"echo 'dtoverlay=audioinjector-wm8731-audio' >> /boot/soundcard.txt\"");
       };
 };
 

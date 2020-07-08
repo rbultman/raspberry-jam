@@ -6,10 +6,7 @@ block content
       h1="Welcome to the Raspberry Jam Configurator"
 
     div(class="form-group")
-      p(class="lead")="Enter your Blynk token below and click 'Submit'"
-
-    div(class="form-group")
-      label(for="blynkToken") Blynk Token
+      label(for="blynkToken") Enter Your Blynk Token
       input(
         type="text"
         id="blynkToken"
@@ -18,4 +15,22 @@ block content
         class="form-control"
       )
 
+    div(class="form-group")
+      label(for="soundcard") Select A Sound Card
+      input(
+        type="button"
+        id="soundCardButton"
+        name="blynkToken"
+        value=blynkToken
+        class="btn btn-secondary dropdown-toggle"
+	data-toggle="dropdown"
+	aria-haspopup="true" 
+	aria-expanded="false"
+      )
+      div(class="dropdown-menu" aria-labelledby="soundCardButton")
+        a(class="dropdown-item" href="#") Action
+        a(class="dropdown-item" href="#") Another action
+        a(class="dropdown-item" href="#") Something else here
+
     input(class="btn btn-primary" type="submit" value="Submit")
+

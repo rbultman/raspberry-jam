@@ -14,7 +14,8 @@
     "http-errors": "~1.6.3",
     "less-middleware": "~2.2.1",
     "morgan": "~1.9.1",
-    "pug": "2.0.0-beta11"
+    "pug": "2.0.0-beta11",
+    "sqlite": "^3.0.6"
   },
   "devDependencies": {
     "nodemon": "^2.0.4"

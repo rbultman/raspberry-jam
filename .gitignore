@@ -5,3 +5,5 @@ default.vim
 blynk
 *.o
 node_modules
+default.vim
+rjam-deploy.tar.gz

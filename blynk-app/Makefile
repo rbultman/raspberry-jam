@@ -9,7 +9,7 @@
 CC ?= gcc
 CXX ?= g++
 CXXFLAGS += -I blynk-library/src/ -I blynk-library/linux/ -DLINUX
-LDFLAGS += -lrt -lpthread -lecasoundc
+LDFLAGS += -lrt -lpthread -lecasoundc -lsqlite3
 
 ifeq ($(build),debug)
 	CXXFLAGS += -c -g2 -O0 \
@@ -45,13 +45,13 @@ else
 	LDFLAGS += -s
 endif
 
-ifeq ($(target),raspberry)
-	CXXFLAGS += -DRASPBERRY -lecasoundc
-	LDFLAGS += -lwiringPi
-endif
+CXXFLAGS += -DRASPBERRY -lecasoundc
+LDFLAGS += -lwiringPi
 
 SOURCES=main.cpp \
-	readUsers.cpp \
+	session_db.cpp \
+	utility.cpp \
+	settings.cpp \
 	blynk-library/src/utility/BlynkDebug.cpp \
 	blynk-library/src/utility/BlynkHandlers.cpp \
 	blynk-library/src/utility/BlynkTimer.cpp
@@ -69,9 +69,4 @@ $(EXECUTABLE): $(OBJECTS)
 
 .cpp.o:
 	$(CXX) $(CXXFLAGS) $< -o $@
-
-ARCHIVE_NAME=$(shell echo blynk-rjam_`date +%Y.%m.%d-%H%M%S`.tar)
-archive:
-	tar -cf $(ARCHIVE_NAME) main.cpp readUsers.h userSpec.h start_jack.sh Makefile readUsers.cpp
-	gzip $(ARCHIVE_NAME)
 

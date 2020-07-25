@@ -10,6 +10,7 @@
 */
 #include <stdio.h> 
 #include <stdlib.h> 
+#include <stdint.h>
 #include <unistd.h> 
 #include <string.h> 
 #include <sys/types.h> 
@@ -20,6 +21,7 @@
 
 #define PORT	 4464 
 #define MAXLINE 1024 
+#define FILTER_CONST 0.9
 
 void printUsage() {
    printf("Usage: \r\n");
@@ -78,6 +80,10 @@ int main(int argc, char ** argv) {
    double maxLatency = 0.0;
    double minLatency = 100000000000.0;
    double avgLatency = -0.1;
+   uint32_t sendCount = 0;
+   fd_set rfds;
+   struct timeval tv;
+   int retval;
 
    if(processArgs(argc, argv) != 0) {
       return -1;
@@ -103,26 +109,45 @@ int main(int argc, char ** argv) {
       sendto(sockfd, argv[nameIndex], strlen(argv[nameIndex]), 
             MSG_CONFIRM, (const struct sockaddr *) &servaddr, 
             sizeof(servaddr)); 
-      printf("Hello message sent.\n"); 
+      printf("Hello message %d sent.\n", ++sendCount); 
 
-      n = recvfrom(sockfd, (char *)buffer, MAXLINE, 
-            MSG_WAITALL, (struct sockaddr *) &servaddr, 
-            &len); 
-      clock_gettime(CLOCK_REALTIME, &endTime);
-      buffer[n] = '\0'; 
-      printf("Server : %s\n", buffer); 
-      startMillis = startTime.tv_sec * 1000.0 + startTime.tv_nsec / 1.0e6;
-      endMillis = endTime.tv_sec * 1000.0 + endTime.tv_nsec / 1.0e6;
-      latency = endMillis - startMillis;
-      if (latency > maxLatency) maxLatency = latency;
-      if (latency < minLatency) minLatency = latency;
-      if (avgLatency < 0.0) {
-         avgLatency = latency;
-      } else {
-         avgLatency = 0.9 * avgLatency + 0.1 * latency;
+      // initialize the set
+      FD_ZERO(&rfds);
+      FD_SET(sockfd, &rfds);
+
+      // set up the wait
+      tv.tv_sec = 2;
+      tv.tv_usec = 0;
+
+      retval = select(sockfd+1, &rfds, NULL, NULL, &tv);
+
+      if (retval == -1) {
+         puts("Some error on the socket occurred");
       }
-      printf("Latency: %.3f, min: %.3f, max: %.3f, avg: %.3f\r\n", latency, minLatency, maxLatency, avgLatency);
-      sleep(2);
+      else if (retval) {
+         n = recvfrom(sockfd, (char *)buffer, MAXLINE, 
+               MSG_WAITALL, (struct sockaddr *) &servaddr, 
+               &len); 
+         clock_gettime(CLOCK_REALTIME, &endTime);
+         buffer[n] = '\0'; 
+         printf("Server : %s\n", buffer); 
+         startMillis = startTime.tv_sec * 1000.0 + startTime.tv_nsec / 1.0e6;
+         endMillis = endTime.tv_sec * 1000.0 + endTime.tv_nsec / 1.0e6;
+         latency = endMillis - startMillis;
+         if (latency > maxLatency) maxLatency = latency;
+         if (latency < minLatency) minLatency = latency;
+         if (avgLatency < 0.0) {
+            avgLatency = latency;
+         } else {
+            // IIR filter for average latency
+            avgLatency = FILTER_CONST * avgLatency + (1.0 - FILTER_CONST) * latency;
+         }
+         printf("Latency: %.3f, min: %.3f, max: %.3f, avg: %.3f\r\n", latency, minLatency, maxLatency, avgLatency);
+         sleep(2);
+      }
+      else {
+         printf("No response received.\n");
+      }
    }
 
 	close(sockfd); 

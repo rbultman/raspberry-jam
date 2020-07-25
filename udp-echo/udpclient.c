@@ -102,13 +102,22 @@ int main(int argc, char ** argv) {
 	inet_pton(AF_INET, argv[serverIndex], &servaddr.sin_addr);
 	servaddr.sin_port = htons(PORT); 
 	
-	int n, len; 
+	int n; 
+   socklen_t len;
 	
    while(1) {
       clock_gettime(CLOCK_REALTIME, &startTime);
+#ifdef MACH_OSX
+      sendto(sockfd, argv[nameIndex], strlen(argv[nameIndex]), 
+            0, (const struct sockaddr *) &servaddr, 
+            sizeof(servaddr)); 
+#endif
+#ifdef MACH_LINUX
       sendto(sockfd, argv[nameIndex], strlen(argv[nameIndex]), 
             MSG_CONFIRM, (const struct sockaddr *) &servaddr, 
             sizeof(servaddr)); 
+#endif
+
       printf("Hello message %d sent.\n", ++sendCount); 
 
       // initialize the set

@@ -49,7 +49,8 @@ int main() {
 		exit(EXIT_FAILURE); 
 	} 
 	
-	int len, n; 
+	int n; 
+   socklen_t len;
 
 	len = sizeof(cliaddr); //len is value/resuslt 
 
@@ -59,9 +60,16 @@ int main() {
             &len); 
       buffer[n] = '\0'; 
       printf("Client : %s\n", buffer); 
+#ifdef MACH_LINUX
       sendto(sockfd, (const char *)hello, strlen(hello), 
             MSG_CONFIRM, (const struct sockaddr *) &cliaddr, 
             len); 
+#endif
+#ifdef MACH_OSX
+      sendto(sockfd, (const char *)hello, strlen(hello), 
+            0, (const struct sockaddr *) &cliaddr, 
+            len); 
+#endif
       printf("Hello message sent.\n"); 
    }
 	

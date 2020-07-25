@@ -36,8 +36,8 @@ On the computer acting as a server: `./udpserver`
 
 On the computer acting as a client: `./udpclient -s <server ip address> -n <some text>`
 
-When a message is received on the server, <some text> will be printed.  
-The text can be used to detect connections from multiple clients.  Several clients
+When a message is received on the server, <some text> will be printed.  The text can be 
+  used to detect connections from multiple clients.  Several clients
 could attempt to connect to the server simultaneously, so the messages printed at the 
 server can be used to see if all clients are connecting.
 

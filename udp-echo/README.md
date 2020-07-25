@@ -5,7 +5,7 @@ connections.  It consists of two programs,  a server and a client, that are
 meant to be used together in order to measure the latency of a network link.
 Simply run the server on one computer and the client on the other.  The client
 sends UDP messages to the server, and the server responds when a message is
-recieved.  The client measures the elapsed time between sending the message
+received.  The client measures the elapsed time between sending the message
 to the server and receiving the response.  It prints the measured time, the
 minimum time, the maximum time, and the average time.  The average time is 
 obtained using an infinite impulse response (IIR) filter.

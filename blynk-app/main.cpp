@@ -28,6 +28,7 @@
 #include "utility.h"
 #include "fe-pi-def.h"
 #include "audio-injector-def.h"
+#include "HIFI_DAC_ADC_DEF.h"
 #include "settings.h"
 
 #define TOTAL_SLOTS 3
@@ -89,6 +90,7 @@ int longPressTimer;
 
 FePi fePiCard;
 AudioInjector audioInjectorCard;
+HifiberryDacPlusAdc hifiberryDacPlusAdc ;
 SoundcardInterface *soundcard;
 
 static const char *rxBufferSize[] = {
@@ -556,9 +558,8 @@ void initializeSoundCard()
          soundcard = &audioInjectorCard;
          break;
       case 3: // Hifiberry DAC +ADC
-		 system("sudo rm /boot/soundcard.txt");
-		 system("sudo bash -c \"echo 'dtoverlay=hifiberry-dacplusadc' >> /boot/soundcard.txt\"");
-
+         hifiberryDacPlusAdc.Initialize();
+         soundcard = &hifiberryDacPlusAdc;
          break;
       default:
          soundcard = NULL;

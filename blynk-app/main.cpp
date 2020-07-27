@@ -199,10 +199,13 @@ BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
    
    sessionInfo.outputLevel = param[0].asInt();
 
-   printf("New output level: %s\n", param[0].asStr());
-   sprintf(mixCommand, "amixer -M set %s %s%%", soundcard->mixMasterCommand, param[0].asStr());
-   printf("%s\r\n",mixCommand);
-   system(mixCommand);
+   if(soundcard->mixMasterCommand)
+   {
+      printf("New output level: %s\n", param[0].asStr());
+      sprintf(mixCommand, "amixer -M set %s %s%%", soundcard->mixMasterCommand, param[0].asStr());
+      printf("%s\r\n",mixCommand);
+      system(mixCommand);
+   }
 }
 
 BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
@@ -217,10 +220,13 @@ BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
    
    sessionInfo.inputLevel = param[0].asInt();
 
-   printf("New input level: %s\n", param[0].asStr());
-   sprintf(mixCommand, "amixer -M set %s %s%%", soundcard->mixCaptureCommand, param[0].asStr());
-   printf("%s\r\n",mixCommand);
-   system(mixCommand);
+   if(soundcard->mixCaptureCommand)
+   {
+      printf("New input level: %s\n", param[0].asStr());
+      sprintf(mixCommand, "amixer -M set %s %s%%", soundcard->mixCaptureCommand, param[0].asStr());
+      printf("%s\r\n",mixCommand);
+      system(mixCommand);
+   }
 }
 
 static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
@@ -574,11 +580,17 @@ BLYNK_WRITE(INPUT_SELECT) //Input Selection
 
    if (param[0])
    {
-      system(soundcard->inputMicCommand);
+      if (soundcard->inputMicCommand)
+      {
+         system(soundcard->inputMicCommand);
+      }
    }
    else
    {
-      system(soundcard->inputLineCommand);
+      if (soundcard->inputLineCommand)
+      {
+         system(soundcard->inputLineCommand);
+      }
    }
 }
 
@@ -594,16 +606,19 @@ BLYNK_WRITE(MIC_GAIN) //Mic Gain
 
    if (param[0])
    {
-      sessionInfo.micBoost++;
-      if (sessionInfo.micBoost >= soundcard->micGainSettingsCount)
+      if (soundcard->micGainText && soundcard->micGainCommand)
       {
-         sessionInfo.micBoost = 0;
-      }
+         sessionInfo.micBoost++;
+         if (sessionInfo.micBoost >= soundcard->micGainSettingsCount)
+         {
+            sessionInfo.micBoost = 0;
+         }
 
-      Blynk.setProperty(MIC_GAIN,"offLabel", soundcard->micGainText[sessionInfo.micBoost]);
-      sprintf(mixCommand, "%s %u", soundcard->micGainCommand, sessionInfo.micBoost);
-      printf("Mic gain command: %s\r\n", mixCommand);
-      system(mixCommand);
+         Blynk.setProperty(MIC_GAIN,"offLabel", soundcard->micGainText[sessionInfo.micBoost]);
+         sprintf(mixCommand, "%s %u", soundcard->micGainCommand, sessionInfo.micBoost);
+         printf("Mic gain command: %s\r\n", mixCommand);
+         system(mixCommand);
+      }
    }
 }
 

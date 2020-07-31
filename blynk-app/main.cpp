@@ -579,6 +579,19 @@ void RouteSlot(int slot)
 		}
 }
 
+void RouteAllSlots()
+{
+   int i;
+
+   for(i=0; i<TOTAL_SLOTS; i++)
+   {
+      if (connectionParams[i].isConnected)
+      {
+         RouteSlot(i);
+      }
+   }
+}
+
 void KillAllSlots()
 {
    int i;
@@ -786,7 +799,7 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 	uint8_t i;
 	if (param[0])
 	{
-		RouteSlot(0);
+		RouteAllSlots();
 	}
 }
 

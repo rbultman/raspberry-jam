@@ -403,23 +403,27 @@ void OpenSlot(int slot)
    char jacktripCommand[128];
 
    Blynk.virtualWrite(connectButton[slot] ,HIGH);
+   sprintf(connections[slot].jacktripKillSearch, "[j]acktrip -o%d -n1 -z -%s -q%s", 
+         connections[slot].portOffset, 
+         connectionParams[slot].connectionType, 
+         rxBufferSize[connections[slot].latency]);
    sprintf(jacktripCommand, "jacktrip -o%d -n1 -z -%s -q%s &", 
          connections[slot].portOffset, 
          connectionParams[slot].connectionType, 
          rxBufferSize[connections[slot].latency]);
-   printf("jacktrip command - %s\r\n",jacktripCommand);
+   printf("jacktrip command - %s\r\n", jacktripCommand);
    system(jacktripCommand);
    connectionParams[slot].isConnected = true;
 }
 
 void KillSlot(int slot)
 {
-   char killcmd[128];
+   char killcmd[255];
 
    Blynk.virtualWrite(connectButton[slot] ,LOW);
    connectionParams[slot].volumeIsEnabled = false;
    //send kill command
-   sprintf(killcmd, "kill `ps aux | grep \"[j]acktrip -o%d\" | awk '{print $2}'`", connections[slot].portOffset);
+   sprintf(killcmd, "kill `ps aux | grep \"%s\" | awk '{print $2}'`", connections[slot].jacktripKillSearch);
    printf("kill cmd = %s\r\n", killcmd);
    system(killcmd);
    connectionParams[slot].isConnected = false;

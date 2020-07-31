@@ -9,6 +9,7 @@ typedef struct ConnectionInfo_T {
    int latency;
    int gain;
    int slot;
+   char jacktripKillSearch[128];
 } ConnectionInfo_T;
 
 typedef struct SessionInfo_T {

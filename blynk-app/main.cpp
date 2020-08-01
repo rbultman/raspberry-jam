@@ -164,29 +164,35 @@ static void PopulateSessionDropDown() {
 BLYNK_CONNECTED() {
    int i;
 
-   // Blynk.syncVirtual(SOUNDCARD); //sync Soundcard selection
-   Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
+   // Sync buttons that control alsa first, don't need jack started for this
    Blynk.syncVirtual(INPUT_LEVEL); //sync input level on connection
    Blynk.syncVirtual(OUTPUT_LEVEL); //sync output level on connection
    Blynk.syncVirtual(INPUT_SELECT); //sync Input selection
-
+   Blynk.syncVirtual(MIC_GAIN);  //sync Mic Gain
+   
+ 
+   Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
+   
+      // set connection states to off
    for (i=0; i<TOTAL_SLOTS; i++) {
-      Blynk.syncVirtual(roleButton[i]); //sync Client 1 IP
+      Blynk.virtualWrite(connectButton[i], LOW);
+ //     Blynk.virtualWrite(gainSlider[i], 0);
+   }
+
+   //Sync Slot settings
+   for (i=0; i<TOTAL_SLOTS; i++) {
+      Blynk.syncVirtual(roleButton[i]); //sync Role
+	  Blynk.syncVirtual(latencySlider[i]); //sync Latency
+	  Blynk.syncVirtual(gainSlider[i]); //sync Gain
+	  	  
    }
 
    // initialize menu items
    PopulateSessionDropDown();
-   Blynk.syncVirtual(SESSION_DROP_DOWN); 
+   //Blynk.syncVirtual(SESSION_DROP_DOWN);  --I don't think we want to sync the session dropdown, we want to sync to the current settings in the app, I  think if the user wants to revert to session settings they would re-select
 
-   // set connection states to off
-   for (i=0; i<TOTAL_SLOTS; i++) {
-      Blynk.virtualWrite(connectButton[i], LOW);
-      Blynk.virtualWrite(gainSlider[i], 0);
-   }
-
-   Blynk.virtualWrite(MONITOR_GAIN_SLIDER, 0);
    Blynk.virtualWrite(ROUTING, LOW);
-   Blynk.syncVirtual(ROUTING);
+
 }
 
 BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
@@ -373,7 +379,7 @@ BLYNK_WRITE(SESSION_DROP_DOWN) // Sessions Book
    }
 }
 
-void EcaConnect(uint8_t slot)   //Sets up a chain in Ecasound with an input/output and gain control
+void EcaConnect(uint8_t slot)   //Sets up a chain in Ecasound with an input/output and gain control for a slot
 {
   char ecaCommand[100];
 
@@ -506,11 +512,11 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
    printf("%s \r\n",sampleRate[sessionInfo.sampleRate]);
    KillAllSlots();
    system("sudo killall jackd");
-   system("jack_wait -q");
+   system("jack_wait -q");  //This will wait until jackd is dead before continuing
    sprintf(jackCommand,"sh start_jack.sh -r%s &", sampleRate[sessionInfo.sampleRate]);
    system(jackCommand);	
-   system("jack_wait -w");
-   EcaSetup();
+   system("jack_wait -w"); //This will wait until jack server is available before continuing
+   EcaSetup();  // Sets up Ecasound chain-setup, chains, starts Ecasound
 
    puts("Exiting sample rate write");
 }
@@ -818,17 +824,17 @@ void GainSliderChanged(int slider, int value)
 
    printf("Gain changed for slider %d\r\n", slider);
 
-	if (connectionParams[slider].volumeIsEnabled)  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
-	{
+//	if (connectionParams[slider].volumeIsEnabled)  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
+//	{
       sprintf(msg, "c-select slot%d", slider);
 		eci_command(msg);
 		SetGainFromSlider(value);
       connections[slider].gain = value;
-	}
-	else
-	{
-		Blynk.virtualWrite(gainSlider[slider], 0);
-	}
+//	}
+//	else
+//	{
+//		Blynk.virtualWrite(gainSlider[slider], 0);
+//	}
 }
 
 BLYNK_WRITE(SLOT1_GAIN_SLIDER)  // slot0 Gain slider

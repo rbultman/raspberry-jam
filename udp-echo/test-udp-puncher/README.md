@@ -4,8 +4,8 @@ _The test code is derived the code originally written by Rob Bultman github.com/
 
 ### WARNINGS
 
-1. This is a simple proof-of-concept hole-puncher, and doesn't try to handle even the simple variations on the basic UDP hole-punching formula.
-2. **SUPER IMPORTANT**. There is a **really good reason** that NAT server and UDP firewalls exist: security. Amongst other things, NAT protects your machine by making it inaccessible to other machins on the internet that might be trying to connect to your machine. This test hole-puncher code effectively denies your software and machine some of those protections. In fact, as implemented, it actually advertises and exposes your machine to external internet connections. So, PLEASE DO NOT DO THIS unless you really understand what you are doing. This code is meant purely for developers trying to understand how their NAT servers work. Please, DO NOT USE THIS CODE AS-IS FOR ANYTHING OTHER THAN LEARNING HOW THIS WORKS! YOU"VE BEEN WARNED, YOU ARE NOW ENTIRELY ON YOUR OWN. THERE ARE NO WARRANTIES OF ANY KIND etc etc etc.
+1. This is a simple proof-of-concept NAT/UDP hole-puncher, and doesn't try to handle even the simple variations on the basic UDP hole-punching formula.
+2. **SUPER IMPORTANT**. There is a **really good reason** that NAT server and UDP firewalls exist: SECURITY. Amongst other things, NAT protects your machine by making it inaccessible to other machines on the internet that might be trying to connect to your machine. This test hole-puncher code effectively denies your software and machine some of those protections. In fact, as implemented, it actually advertises and exposes your machine to external internet connections. So, PLEASE DO NOT DO THIS unless you really understand what you are doing. This code is intended purely for use by developers trying to understand how their NAT servers work. Please, DO NOT USE THIS CODE AS-IS FOR ANYTHING OTHER THAN LEARNING HOW THIS WORKS! YOU"VE BEEN WARNED, YOU ARE NOW ENTIRELY ON YOUR OWN. THERE ARE NO WARRANTIES OF ANY KIND etc etc etc.
 
 OK, you may now read on :-)
 
@@ -20,7 +20,7 @@ g++ test-server.cpp -o test-server
 
 ### RUNNING THE SERVER
 
-Run the test server. Make sure you are on a machine that is directly accessable on the open internet at the port you pick (e.g. by setting up port forwarding on your router or opening up ports on your firewall etc.):
+Run the test server. Make sure you are on a machine that is directly accessible on the open internet at the port you pick (e.g. by setting up port forwarding on your router or opening up ports on your firewall etc.):
 
 ```
 ./test-server -p PORT_NUMBER
@@ -34,7 +34,7 @@ e.g.
 
 ### RUNNING THE FIRST PEER TEST CLIENT
 
-You need to run (at least) two test clients. They do NOT need to be directly accessable on the open internet, they only need to be able to directly access the internet). In a proper test, each test client should be behind a different firewall/NAT, but it will also work of both clients and the server are behind the same firewall/NAT:
+You need to run (at least) two test clients. They do NOT need to be directly accessible on the open internet, they only need to be able to directly access the internet). In a proper test, each test client should be behind a different firewall/NAT, but it will also work of both clients and the server are behind the same firewall/NAT:
 
 ```
 ./test-server -s TEST_SERVER_IP_ADDRESS -p TEST_SERVER_PORT_NUMBER -n A_NAME_I_PICK_FOR_MYSELF -c THE_NAME_OF_THE_PEER_I_AM_CONTACTING
@@ -52,7 +52,7 @@ Next, start a client called `alice` that wants to connect to a peer client calle
 ./test-client -s 127.0.0.1 -p 8080 -n alice -c bob
 ```
 
-The server should respond within a few seconds (configurable in the server code) with a "Phonebook" of entries for connected clients. If this is the first client to connect you will only see a single entry in the phonebook at this time. See _How it works_ below for more details.
+The server should respond within a few seconds (configurable in the server code) with a "Phonebook" of entries for connected clients. Due to some artifacts of hot it works, it may take a few go around before you see the server response as such, but it should happen within about 30 seconds, depending how the server is configured. If this is the first client to connect you will only see a single entry in the phonebook at this time. See _How the server works_ below for more details.
 
 ### RUNNING THE SECOND PEER TEST CLIENT
 
@@ -68,9 +68,9 @@ You should get a response shortly with an updated phonebook that includes both t
 
 When two peers behind NATs want to connect to each other, there are two different problems that need to be solved. The first is that each peer is not directly addressable on the internet but is connecting through a NAT device of some sort that is assigning some new external address (including a port number) to the client socket. So, the first problem is to figure out what this external address is. The second problem is to signal to other people so they can reach you at this external address. The server handles these two problems through its phonebook.
 
-Technically speaking, problem #1 is easy enough to solve: there are a lot of ways you can discover your own external address ... e.g. STUN or you can even just hit google or some other server that will tell you what _it_ saw as your IP address.
+Technologically speaking, problem #1 is easy enough to solve: there are a lot of ways a client can discover its own external IP address ... e.g. STUN or you can even just hit google or some other server that will tell you what _it_ saw as your IP address.
 
-The test server solves problem #2 by requiring that when a peer client connects to the server, the client associates itself with a unique name. The server stores client names and client external addresses in its phonebook, and sends a copy of its phonebook as a response to anyone that connects to it.
+Problem #2 is trickier since you need some coordination mechnism to inform others about your availability and your externally accessible address and port. The test server solves problem #2 by requiring that when a peer client connects to the server, the client provides it with a unique handle - a unique name - that the client wants associated with itself. The server stores client names and client external addresses in its phonebook, and sends a copy of its phonebook as a response to anyone that connects to it.
 
 The client name is pretty much any string (so make sure you pick a unique name for each test client!). The server phonebook is implemented as a simple static circular buffer, which means that entries are added one at a time as new clients connect. If the name is already in the phonebook, the old address is overwritten. If it's not in the address book, it's added. When MAXCLIENTS number of entries is reached, it just wraps around overwriting the oldest client entries. MAXCLIENTS is configurable in `test-server.cpp`. Each time a client connects to it, it sends back the entire phonebook as a response to that client. That's pretty much the only thing the server does.
 
@@ -78,7 +78,7 @@ _Note: In the code, I refer to the server as the "Stage Manager". The original a
 
 ### How it works on each peer client
 
-Each client is behind it's own NAT, and is not directly reachable on the internet. This means that no one "on the outside" can initiate connections to the client. However, machines on the outside of the firewall _can_ send responses to packets that were initiated by the client, and these responses need to be forwarded back to the client. Therefore, the NAT software sets up an exteral IP address and port mapping for server responses, and these response packets are forwarded back to the client's initiating socket. Understanding how these responses are treated and forwarded back to the initiating client socket by the NAT software is crucial to understanding how UDP hole punching works.
+Each client is behind it's own NAT, and is not directly reachable on the internet. This means that no one "on the outside" can initiate connections to the client. However, here's the loophole on that rule: machines on the outside of the firewall _can_ send responses to packets that were initiated by the client, and these responses *are* forwarded back to the client. To make this reponse forwarding work, the NAT software sets up an exteral IP address and port mapping for server responses, and when received, these response packets are forwarded back to the client's initiating socket. Understanding how these responses are treated and forwarded back to the initiating client socket by the NAT software is crucial to understanding how UDP hole punching works.
 
 Recall that when a client connects to the test server, it gets back the phone book of all other connected clients along with the IP addresses and ports for each client. Assume Alice and Bob are two clients that want to tallk directly to each other. Once Alice and Bob are connected to the test server, they each get a copy of the phonebook, and so can locate each other through each other's external IP addresses and port. However, that can't be used right away to connect to the client because the NAT will drop any packets that aren't a response to a connection initiated from within the NAT to that address.
 

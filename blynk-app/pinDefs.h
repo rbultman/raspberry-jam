@@ -13,18 +13,24 @@
 #define SLOT1_LATENCY         V5
 #define SLOT1_GAIN_SLIDER     V22
 #define SLOT1_START_BUTTON    V6
+#define SLOT1_IP_PORT         V33
+#define SLOT1_CONNECTION_NAME V34
 
 #define SLOT2_EDIT_BUTTON     V31
 #define SLOT2_ROLE_BUTTON     V8
 #define SLOT2_LATENCY V9
 #define SLOT2_GAIN_SLIDER     V24
 #define SLOT2_START_BUTTON    V11
+#define SLOT2_IP_PORT         V35
+#define SLOT2_CONNECTION_NAME V36
 
 #define SLOT3_EDIT_BUTTON     V32
 #define SLOT3_ROLE_BUTTON     V12
 #define SLOT3_LATENCY V14
 #define SLOT3_GAIN_SLIDER     V25
 #define SLOT3_START_BUTTON    V15
+#define SLOT3_IP_PORT         V37
+#define SLOT3_CONNECTION_NAME V38
 
 #define LEFT_EDIT_FIELD_TEXT_BOX  V27
 #define RIGHT_EDIT_FIELD_TEXT_BOX V29
@@ -38,5 +44,6 @@
 #define SOUNDCARD                 V19
 #define INPUT_SELECT              V20
 #define MIC_GAIN                  V21
+
 
 #endif // PIN_DEFS_H

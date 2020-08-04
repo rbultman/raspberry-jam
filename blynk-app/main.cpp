@@ -32,6 +32,7 @@
 #include "settings.h"
 
 #define TOTAL_SLOTS 3
+#define ECA_CHANNEL_OFFSET 2
 
 int connectButton[TOTAL_SLOTS] = {
    SLOT1_START_BUTTON,
@@ -63,6 +64,18 @@ int gainSlider[TOTAL_SLOTS] = {
    SLOT3_GAIN_SLIDER,
 };
 
+int ipPort[TOTAL_SLOTS] = {
+   SLOT1_IP_PORT,
+   SLOT2_IP_PORT,
+   SLOT3_IP_PORT,
+};
+
+int connectionName[TOTAL_SLOTS] = {
+   SLOT1_CONNECTION_NAME,
+   SLOT2_CONNECTION_NAME,
+   SLOT3_CONNECTION_NAME,
+};
+
 ConnectionInfo_T connections[TOTAL_SLOTS];
 SessionInfo_T sessionInfo;
 std::vector<char *> sessionNames;
@@ -87,6 +100,8 @@ bool myVolumeIsEnabled = false;
 
 int longPressMillis = 2000;    // time in millis needed for longpress
 int longPressTimer;
+int pollTimeMillis = 1000;
+int pollTimer;
 
 FePi fePiCard;
 AudioInjector audioInjectorCard;
@@ -119,12 +134,13 @@ typedef struct JacktripParams {
    char connectionType[32];
    bool isConnected;
    bool volumeIsEnabled;
+   bool pollForClient;
 } JacktripParams;
 
 JacktripParams connectionParams[TOTAL_SLOTS] = {
-   {"s --clientname slot0", false, false},
-   {"s --clientname slot1", false, false},
-   {"s --clientname slot2", false, false}
+   {"s --clientname slot0", false, false, false},
+   {"s --clientname slot1", false, false, false},
+   {"s --clientname slot2", false, false, false}
 };
 
 BlynkTimer tmr;
@@ -164,6 +180,12 @@ static void PopulateSessionDropDown() {
 BLYNK_CONNECTED() {
    int i;
 
+   system("export JACK_NO_AUDIO_RESERVATION=1");
+   system("sudo service triggerhappy stop");
+   system("sudo service dbus stop");
+   system("sudo mount -o remount,size=128M /dev/shm");
+   system("echo -n performance | sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
+   
    // Sync buttons that control alsa first, don't need jack started for this
    Blynk.syncVirtual(INPUT_LEVEL); //sync input level on connection
    Blynk.syncVirtual(OUTPUT_LEVEL); //sync output level on connection
@@ -176,22 +198,24 @@ BLYNK_CONNECTED() {
       // set connection states to off
    for (i=0; i<TOTAL_SLOTS; i++) {
       Blynk.virtualWrite(connectButton[i], LOW);
- //     Blynk.virtualWrite(gainSlider[i], 0);
+
    }
 
    //Sync Slot settings
+
    for (i=0; i<TOTAL_SLOTS; i++) {
-      Blynk.syncVirtual(roleButton[i]); //sync Role
 	  Blynk.syncVirtual(latencySlider[i]); //sync Latency
 	  Blynk.syncVirtual(gainSlider[i]); //sync Gain
+	  Blynk.syncVirtual(ipPort[i]); //sync ip & port
+      Blynk.syncVirtual(connectionName[i]); //sync connection name
+	  Blynk.syncVirtual(roleButton[i]); //sync Role
 	  	  
    }
 
+   Blynk.syncVirtual(MONITOR_GAIN_SLIDER);
+
    // initialize menu items
    PopulateSessionDropDown();
-   //Blynk.syncVirtual(SESSION_DROP_DOWN);  --I don't think we want to sync the session dropdown, we want to sync to the current settings in the app, I  think if the user wants to revert to session settings they would re-select
-
-   Blynk.virtualWrite(ROUTING, LOW);
 
 }
 
@@ -283,8 +307,10 @@ void PopulateUiWithSessionInfo()
       SetSlotRole(i, connections[i].role);
 
       Blynk.setProperty(connectButton[i], "label", connections[i].name);
+	  Blynk.virtualWrite(connectionName[i],connections[i].name);
       sprintf(ip_port, "%s:%d", connections[i].ipAddr, connections[i].portOffset);
       Blynk.setProperty(roleButton[i], "label", ip_port);
+	  Blynk.virtualWrite(ipPort[i],ip_port);
       Blynk.virtualWrite(latencySlider[i], connections[i].latency);
       Blynk.virtualWrite(roleButton[i], connections[i].role);
 
@@ -416,10 +442,8 @@ void EcaConnect(uint8_t slot)   //Sets up a chain in Ecasound with an input/outp
     //For each slot that is 'connected' add slot to connected slots
 		sprintf(ecaCommand,"slot%d,",slot);
 		strcat(connectedSlots, ecaCommand);  
-		connectionParams[slot].volumeIsEnabled = true;
+		//connectionParams[slot].volumeIsEnabled = true;
 
-    // set this slot's gain slider
-		Blynk.virtualWrite(gainSlider[slot], 0);
 	
 }
 
@@ -446,7 +470,6 @@ void EcaSetup() // Ecasound setup/start
 		printf("Chain operator status: %s\n", eci_last_string());
 
 		myVolumeIsEnabled = true;
-		Blynk.virtualWrite(MONITOR_GAIN_SLIDER, 0);
 	
 		eci_command("c-add outL");  //Add a chain for main out left
 		eci_command("c-select outL");
@@ -513,7 +536,8 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
    KillAllSlots();
    system("sudo killall jackd");
    system("jack_wait -q");  //This will wait until jackd is dead before continuing
-   sprintf(jackCommand,"sh start_jack.sh -r%s &", sampleRate[sessionInfo.sampleRate]);
+   sprintf(jackCommand,"jackd -P70 -p32 -t2000 -d alsa -r%s -p64 -s -S &", sampleRate[sessionInfo.sampleRate]);
+   //sprintf(jackCommand,"sh start_jack.sh -r%s &", sampleRate[sessionInfo.sampleRate]);
    system(jackCommand);	
    system("jack_wait -w"); //This will wait until jack server is available before continuing
    EcaSetup();  // Sets up Ecasound chain-setup, chains, starts Ecasound
@@ -526,17 +550,32 @@ void OpenSlot(int slot)
    char jacktripCommand[128];
 
    Blynk.virtualWrite(connectButton[slot] ,HIGH);
-   sprintf(connections[slot].jacktripKillSearch, "[j]acktrip -o%d -n1 -z -%s -q%s", 
+   sprintf(connections[slot].jacktripKillSearch, "[j]acktrip -o%d -n1 -z -%s -q%s --nojackportsconnect", 
          connections[slot].portOffset, 
          connectionParams[slot].connectionType, 
          rxBufferSize[connections[slot].latency]);
-   sprintf(jacktripCommand, "jacktrip -o%d -n1 -z -%s -q%s &", 
+   sprintf(jacktripCommand, "jacktrip -o%d -n1 -z -%s -q%s --nojackportsconnect &", 
          connections[slot].portOffset, 
          connectionParams[slot].connectionType, 
          rxBufferSize[connections[slot].latency]);
    printf("jacktrip command - %s\r\n", jacktripCommand);
    system(jacktripCommand);
    connectionParams[slot].isConnected = true;
+}
+
+void StopTimerIfConnectionsResolved()
+{
+	int i;
+	bool stopTimer = true;
+	
+	for (i=0; i<TOTAL_SLOTS; i++) {
+		if (connectionParams[i].pollForClient) {
+		stopTimer = false;
+		}
+	}
+	if (stopTimer) {
+	tmr.disable(pollTimer);	
+	}
 }
 
 void KillSlot(int slot)
@@ -550,38 +589,70 @@ void KillSlot(int slot)
    printf("kill cmd = %s\r\n", killcmd);
    system(killcmd);
    connectionParams[slot].isConnected = false;
+   connectionParams[slot].pollForClient = false;
+   StopTimerIfConnectionsResolved();
    // sleep a little so the process dies and jackd recovers
    sleep_millis(250);
+}
+
+void PollForClient()
+{
+	int i;
+	char ecaCommand[100];
+	int status;
+	int ret;
+	printf("POLL FOR CLIENT TEST\r\n");
+	for (i=0; i<TOTAL_SLOTS; i++) {
+		//Check if slot needs to be polled
+		if (connectionParams[i].pollForClient) {
+			printf("Polling Slot %d\r\n",i);
+			sprintf(ecaCommand,"jack_connect ecasound:in_%d slot%d:receive_1",i + ECA_CHANNEL_OFFSET,i);  
+			printf("===> Connecting receive from slot to ecasound chain command: %s\r\n",ecaCommand);
+			status = system(ecaCommand);
+			if (status != -1) { // -1 means an error with the call itself
+				ret = WEXITSTATUS(status);
+				printf("===> Exit Code: %d\r\n",ret);
+				if (ret == 0) {
+				connectionParams[i].pollForClient = false;
+				StopTimerIfConnectionsResolved();
+				printf("Slot %d routed\r\n",i);
+				}
+			}	
+		}
+		//try to connect slot
+	}
 }
 
 void RouteSlot(int slot)
 {
 	char ecaCommand[100];
+	int ret;
+	int status;
 	
-    // Disconnect jack, let ecasound handle
+    // Connect slot to ecasound
 		if (connections[slot].role==0)   //If this slot is a server
 		{	
-      //Connect receive from slot to Ecasound chain
-			sprintf(ecaCommand,"jack_connect ecasound:in_%d slot%d:receive_1",slot +2,slot);  
-			printf("===> Connecting receive from slot to ecasound chain command: %s\r\n",ecaCommand);
-			system(ecaCommand);
+		connectionParams[slot].pollForClient = true;  //server connections need to be polled until clinet connects
+		
+		tmr.enable(pollTimer); //Enable timer to poll for client connection
 
-      //Disconnect jacktrip from system playback since connection is now to Ecasound
-			sprintf(ecaCommand,"jack_disconnect system:playback_1 slot%d:receive_1",slot);  
-			printf("===> Disconnecting jacktrip from system playback command: %s\r\n",ecaCommand);
-			system(ecaCommand);
 		}
 		else  //If this slot is a client
 		{
       //Connect receive from slot to Ecasound chain
-			sprintf(ecaCommand,"jack_connect %s:receive_1 ecasound:in_%d",connections[slot].ipAddr,slot +2); 
-			printf("===> Connecting receive from slot to ecasound chain command: %s\r\n",ecaCommand);
-			system(ecaCommand);
 
-      //Disconnect jacktrip from system playback since connection is now to Ecasound
-			sprintf(ecaCommand,"jack_disconnect system:playback_1 %s:receive_1",connections[slot].ipAddr); 
-			printf("===> Disconnecting jacktrip from system playback command: %s\r\n",ecaCommand);
-			system(ecaCommand);			
+			sprintf(ecaCommand,"jack_connect %s:receive_1 ecasound:in_%d",connections[slot].ipAddr,slot + ECA_CHANNEL_OFFSET); 
+			printf("===> Connecting receive from slot to ecasound chain command: %s\r\n",ecaCommand);
+			ret = 1;
+			while (ret == 1){  //repeat connection attempt until successful
+			status = system(ecaCommand);
+			if (status != -1) { // -1 means an error with the call itself
+				ret = WEXITSTATUS(status);  //get exit code from system command
+				printf("===> Exit Code: %d\r\n",ret);
+				}
+			}
+			connectionParams[slot].volumeIsEnabled = true;
+		
 		}
 }
 
@@ -654,7 +725,7 @@ BLYNK_WRITE(SLOT3_START_BUTTON) //Connection 3 Connect button
 
 void SetSlotIpAddress(uint8_t slot, const char *newIp) {
    int ipCheck = 1;
-   printf("New IP address requested for slot 1: %s\n", newIp);
+   printf("New IP address requested for slot: %s\n", newIp);
    ipCheck=checkIpFormat(newIp);
    if (ipCheck == 0)
    {	
@@ -824,17 +895,11 @@ void GainSliderChanged(int slider, int value)
 
    printf("Gain changed for slider %d\r\n", slider);
 
-//	if (connectionParams[slider].volumeIsEnabled)  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
-//	{
-      sprintf(msg, "c-select slot%d", slider);
-		eci_command(msg);
-		SetGainFromSlider(value);
-      connections[slider].gain = value;
-//	}
-//	else
-//	{
-//		Blynk.virtualWrite(gainSlider[slider], 0);
-//	}
+   sprintf(msg, "c-select slot%d", slider);
+   eci_command(msg);
+   SetGainFromSlider(value);
+   connections[slider].gain = value;
+
 }
 
 BLYNK_WRITE(SLOT1_GAIN_SLIDER)  // slot0 Gain slider
@@ -870,6 +935,7 @@ BLYNK_WRITE(LEFT_EDIT_FIELD_TEXT_BOX) //Left edit field
       strcpy(connections[slotBeingEdited].name, param[0].asStr());  //write new user name for active slot
       TrimWhitespace(connections[slotBeingEdited].name);
       Blynk.setProperty(connectButton[slotBeingEdited], "label", connections[slotBeingEdited].name); // Write user name as label to connect button for active slot
+	  Blynk.virtualWrite(connectionName[slotBeingEdited], connections[slotBeingEdited].name);
    }
 }
 
@@ -897,6 +963,7 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) // Right edit field
       sprintf(buf, "%s:%d", connections[slotBeingEdited].ipAddr, connections[slotBeingEdited].portOffset);
 
       Blynk.setProperty(roleButton[slotBeingEdited], "label", buf);
+	  Blynk.virtualWrite(ipPort[slotBeingEdited], buf);
    } else if (editMode == EditMode_Session) {
       // get it
       strcpy(sessionInfo.name, param[0].asStr());
@@ -962,16 +1029,11 @@ BLYNK_WRITE(MONITOR_GAIN_SLIDER)  // Monitor Gain slider
 {
    puts("Monitor gain slider changed.");
 
-	if (myVolumeIsEnabled)  //Check to make sure the slot is connected/routed otherwise gain control should be ignored
-	{
-		eci_command("c-select self");
-		SetGainFromSlider(param[0].asInt());
-      sessionInfo.monitorGain = param[0].asInt();
-	}
-	else
-	{
-		Blynk.virtualWrite(MONITOR_GAIN_SLIDER, 0);
-	}	
+
+   eci_command("c-select self");
+   SetGainFromSlider(param[0].asInt());
+   sessionInfo.monitorGain = param[0].asInt();
+		
 }
 
 bool longPressDetected = false;
@@ -1068,10 +1130,86 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
    }
 }
 
+BLYNK_WRITE(SLOT1_CONNECTION_NAME)
+{
+	printf("Slot 0 name %s \r\n",param[0].asStr());
+	strcpy(connections[0].name, param[0].asStr());
+}
+
+BLYNK_WRITE(SLOT2_CONNECTION_NAME)
+{
+	printf("Slot 1 name %s \r\n",param[0].asStr());
+	strcpy(connections[1].name, param[0].asStr());
+}
+
+BLYNK_WRITE(SLOT3_CONNECTION_NAME)
+{
+	printf("Slot 2 name %s \r\n",param[0].asStr());
+	strcpy(connections[2].name, param[0].asStr());
+}
+
+BLYNK_WRITE(SLOT1_IP_PORT)
+{
+	char *p;
+	char buf[64];
+
+    strcpy(buf, param[0].asStr());
+
+    // find ip address
+    p = strtok(buf, ":");
+    if (p == NULL) return;
+	strcpy(connections[0].ipAddr, p);
+
+      // find offset
+    p = strtok(NULL, ":");
+    if (p == NULL) return;
+    connections[0].portOffset = strtol(p, NULL, 10);
+}
+
+BLYNK_WRITE(SLOT2_IP_PORT)
+{
+	char *p;
+	char buf[64];
+
+    strcpy(buf, param[0].asStr());
+
+    // find ip address
+    p = strtok(buf, ":");
+
+    if (p == NULL) return;
+	strcpy(connections[1].ipAddr, p);
+
+      // find offset
+    p = strtok(NULL, ":");
+    if (p == NULL) return;
+    connections[1].portOffset = strtol(p, NULL, 10);
+}
+
+BLYNK_WRITE(SLOT3_IP_PORT)
+{
+	char *p;
+	char buf[64];
+
+    strcpy(buf, param[0].asStr());
+
+    // find ip address
+    p = strtok(buf, ":");
+
+    if (p == NULL) return;
+	strcpy(connections[2].ipAddr, p);
+
+      // find offset
+    p = strtok(NULL, ":");
+    if (p == NULL) return;
+    connections[2].portOffset = strtol(p, NULL, 10);
+}
+
 void setup(const char *auth, const char *serv, uint16_t port)
 {
    initializeSoundCard();
    eci_init();	//Initialize Ecasound
+   pollTimer = tmr.setInterval(pollTimeMillis, PollForClient);
+   tmr.disable(pollTimer);
    Blynk.begin(auth, serv, port);
 
    tmr.setInterval(1000, [](){

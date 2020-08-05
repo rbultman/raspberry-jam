@@ -103,7 +103,6 @@ int longPressTimer;
 int pollTimeMillis = 1000;
 int pollTimer;
 
-bool shortPress = true;
 
 FePi fePiCard;
 AudioInjector audioInjectorCard;

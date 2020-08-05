@@ -103,6 +103,8 @@ int longPressTimer;
 int pollTimeMillis = 1000;
 int pollTimer;
 
+bool shortPress = true;
+
 FePi fePiCard;
 AudioInjector audioInjectorCard;
 HifiberryDacPlusAdc hifiberryDacPlusAdc ;
@@ -150,6 +152,7 @@ void SetSlotRole(uint8_t slot, uint8_t role);
 void KillSlot(int slot);
 void KillAllSlots();
 void OpenSlot(int slot);
+void RouteSlot(int slot);
 void initializeSoundCard();
 
 static void PopulateSessionDropDown() {
@@ -192,7 +195,9 @@ BLYNK_CONNECTED() {
    Blynk.syncVirtual(INPUT_SELECT); //sync Input selection
    Blynk.syncVirtual(MIC_GAIN);  //sync Mic Gain
    
- 
+   Blynk.virtualWrite(editButton[0],0);
+   Blynk.syncVirtual(editButton[0]);
+   
    Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
    
       // set connection states to off
@@ -204,6 +209,7 @@ BLYNK_CONNECTED() {
    //Sync Slot settings
 
    for (i=0; i<TOTAL_SLOTS; i++) {
+
 	  Blynk.syncVirtual(latencySlider[i]); //sync Latency
 	  Blynk.syncVirtual(gainSlider[i]); //sync Gain
 	  Blynk.syncVirtual(ipPort[i]); //sync ip & port
@@ -274,6 +280,7 @@ static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
       {
          KillSlot(slot);
          OpenSlot(slot);
+		 RouteSlot(slot);
       }
    }
 }
@@ -313,7 +320,7 @@ void PopulateUiWithSessionInfo()
 	  Blynk.virtualWrite(ipPort[i],ip_port);
       Blynk.virtualWrite(latencySlider[i], connections[i].latency);
       Blynk.virtualWrite(roleButton[i], connections[i].role);
-
+      Blynk.virtualWrite(gainSlider[i],connections[i].gain);
       Blynk.virtualWrite(editButton[i], LOW);
       Blynk.syncVirtual(editButton[i]);
       sprintf(label, "Connection %d", i);
@@ -590,6 +597,7 @@ void KillSlot(int slot)
    system(killcmd);
    connectionParams[slot].isConnected = false;
    connectionParams[slot].pollForClient = false;
+   connectionParams[slot].volumeIsEnabled = false;
    StopTimerIfConnectionsResolved();
    // sleep a little so the process dies and jackd recovers
    sleep_millis(250);
@@ -614,6 +622,9 @@ void PollForClient()
 				printf("===> Exit Code: %d\r\n",ret);
 				if (ret == 0) {
 				connectionParams[i].pollForClient = false;
+				connectionParams[i].volumeIsEnabled = true;
+				sprintf(ecaCommand,"jack_connect system:capture_1 slot%d:send_1",i);
+				system(ecaCommand);
 				StopTimerIfConnectionsResolved();
 				printf("Slot %d routed\r\n",i);
 				}
@@ -652,6 +663,8 @@ void RouteSlot(int slot)
 				}
 			}
 			connectionParams[slot].volumeIsEnabled = true;
+			sprintf(ecaCommand,"jack_connect %s:send_1 system:capture_1",connections[slot].ipAddr);
+			system(ecaCommand);
 		
 		}
 }
@@ -687,6 +700,7 @@ void DisconnectSlot(void *pSlot)
    uint32_t slot = (uint32_t)pSlot;
 
    printf("Disconnecting slot: %d\r\n", slot);
+   Blynk.virtualWrite(connectButton[slot],0);
    KillSlot(slot);
    printf("Slot %d disconnected\r\n", slot+1);
 }
@@ -697,13 +711,13 @@ void ConnectSlot(int slot, int pressed)
 
    if (pressed)
    {
-      KillSlot(slot);
-      OpenSlot(slot);
-	  RouteSlot(slot);
       longPressTimer = tmr.setTimeout(longPressMillis, DisconnectSlot, (void *)slot);
    }
    else
    {	
+	  KillSlot(slot);
+      OpenSlot(slot);
+	  RouteSlot(slot);
       tmr.deleteTimer(longPressTimer);
    }
 }
@@ -765,6 +779,7 @@ void SetSlotRole(uint8_t slot, uint8_t role)
    if (restartNeeded)
    {
       OpenSlot(slot);
+	  RouteSlot(slot);
    }
 }
 
@@ -866,20 +881,6 @@ BLYNK_WRITE(MIC_GAIN) //Mic Gain
    }
 }
 
-
-
-BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
-{
-   char ecaCommand[100];
-   
-	printf("Routing button selected: %s\n", param[0].asStr());
-	uint8_t i;
-	if (param[0])
-	{
-		RouteAllSlots();
-	}
-}
-
 void SetGainFromSlider(int gain)   //Get gain from the slider widget, apply to the gain control in ecasound
 {
    char ecaCommand[100];
@@ -888,6 +889,56 @@ void SetGainFromSlider(int gain)   //Get gain from the slider widget, apply to t
    printf("Gain: %s\n",ecaCommand);
    eci_command(ecaCommand);
 }
+
+BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
+{
+   
+	printf("Routing button selected: %s\n", param[0].asStr());
+	char msg[100];
+	uint8_t i;
+	if (param[0])
+	{
+		if (slotBeingEdited != -1) {    //Check that an edit button is pressed
+			if (connectionParams[slotBeingEdited].volumeIsEnabled) {  //Make sure the connection is active
+			
+				sprintf(msg, "c-select slot%d", slotBeingEdited);  //Turn down the gain to the outputs so you don't hear the test
+				eci_command(msg);
+     			SetGainFromSlider(-100);
+				printf("slot being edited roll: %d\r\n",connections[slotBeingEdited].role);
+				if (connections[slotBeingEdited].role == 0) {  //If connection is a server
+  
+					system("jack_iodelay &");  // Start jack_iodelay
+					sleep_millis(5000);
+					sprintf(msg,"jack_connect slot%d:send_1 jack_delay:out",slotBeingEdited);  //Connect jack io_delay
+					printf("jack_connect slot%d:send_1 jack_delay:out",slotBeingEdited);
+					system(msg);
+					sprintf(msg,"jack_connect slot%d:receive_1 jack_delay:in",slotBeingEdited);
+					printf("jack_connect slot%d:receive_1 jack_delay:in",slotBeingEdited);
+					system(msg);
+					
+					
+				}
+				else  //Connection is a client
+				{
+				    
+					sprintf(msg,"jack_connect %s:receive_1 %s:send_1",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);  //establish loopback
+					printf ("jack_connect %s:receive_1 %s:send_1\r\n",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);
+					system(msg);
+					
+					
+				}
+			}
+		}	
+	}
+	else
+	{
+	system("killall jack_iodelay");  // Stop jack io_delay
+	if (slotBeingEdited != -1) {
+		Blynk.syncVirtual(gainSlider[slotBeingEdited]);  // Set gain back to value from the slider
+		}
+	}
+}
+
 
 void GainSliderChanged(int slider, int value)
 {
@@ -923,6 +974,7 @@ void ClearEditBoxes() {
    Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX,"label"," ");  //clear right edit field label
    Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"\r");        //clear right edit field data
    editMode = EditMode_Idle;
+   slotBeingEdited = -1;
 }
 
 BLYNK_WRITE(LEFT_EDIT_FIELD_TEXT_BOX) //Left edit field

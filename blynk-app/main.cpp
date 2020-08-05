@@ -932,6 +932,9 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 	else
 	{
 	system("killall jack_iodelay");  // Stop jack io_delay
+	sprintf(msg,"jack_disconnect %s:receive_1 %s:send_1",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);  //disable loopback
+	printf ("jack_connect %s:receive_1 %s:send_1\r\n",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);
+	system(msg);
 	if (slotBeingEdited != -1) {
 		Blynk.syncVirtual(gainSlider[slotBeingEdited]);  // Set gain back to value from the slider
 		}

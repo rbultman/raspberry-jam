@@ -97,11 +97,13 @@ BlynkSocket Blynk(_blynkTransport);
 
 char connectedSlots[64];
 bool myVolumeIsEnabled = false;
+bool debounceFlag = true;
 
 int longPressMillis = 2000;    // time in millis needed for longpress
 int longPressTimer;
 int pollTimeMillis = 1000;
 int pollTimer;
+int debounceTimer;
 
 
 FePi fePiCard;
@@ -181,12 +183,6 @@ static void PopulateSessionDropDown() {
 
 BLYNK_CONNECTED() {
    int i;
-
-   system("export JACK_NO_AUDIO_RESERVATION=1");
-   system("sudo service triggerhappy stop");
-   system("sudo service dbus stop");
-   system("sudo mount -o remount,size=128M /dev/shm");
-   system("echo -n performance | sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
    
    // Sync buttons that control alsa first, don't need jack started for this
    Blynk.syncVirtual(INPUT_LEVEL); //sync input level on connection
@@ -196,6 +192,9 @@ BLYNK_CONNECTED() {
    
    Blynk.virtualWrite(editButton[0],0);
    Blynk.syncVirtual(editButton[0]);
+   
+   Blynk.virtualWrite(ROUTING,0);
+   Blynk.syncVirtual(ROUTING);
    
    Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
    
@@ -540,6 +539,8 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
    }
    printf("%s \r\n",sampleRate[sessionInfo.sampleRate]);
    KillAllSlots();
+   eci_command("stop-sync");
+   eci_command("cs-disconnect");
    system("sudo killall jackd");
    system("jack_wait -q");  //This will wait until jackd is dead before continuing
    sprintf(jackCommand,"jackd -P70 -p32 -t2000 -d alsa -r%s -p64 -s -S &", sampleRate[sessionInfo.sampleRate]);
@@ -555,7 +556,7 @@ void OpenSlot(int slot)
 {
    char jacktripCommand[128];
 
-   Blynk.virtualWrite(connectButton[slot] ,HIGH);
+   //Blynk.virtualWrite(connectButton[slot] ,HIGH);
    sprintf(connections[slot].jacktripKillSearch, "[j]acktrip -o%d -n1 -z -%s -q%s --nojackportsconnect", 
          connections[slot].portOffset, 
          connectionParams[slot].connectionType, 
@@ -623,6 +624,7 @@ void PollForClient()
 				connectionParams[i].pollForClient = false;
 				connectionParams[i].volumeIsEnabled = true;
 				sprintf(ecaCommand,"jack_connect system:capture_1 slot%d:send_1",i);
+				//Blynk.virtualWrite(connectButton[i] ,HIGH);
 				system(ecaCommand);
 				StopTimerIfConnectionsResolved();
 				printf("Slot %d routed\r\n",i);
@@ -662,10 +664,12 @@ void RouteSlot(int slot)
 				}
 			}
 			connectionParams[slot].volumeIsEnabled = true;
+			//Blynk.virtualWrite(connectButton[slot] ,HIGH);
 			sprintf(ecaCommand,"jack_connect %s:send_1 system:capture_1",connections[slot].ipAddr);
 			system(ecaCommand);
 		
 		}
+	Blynk.virtualWrite(connectButton[slot] ,HIGH);
 }
 
 void RouteAllSlots()
@@ -699,14 +703,19 @@ void DisconnectSlot(void *pSlot)
    uint32_t slot = (uint32_t)pSlot;
 
    printf("Disconnecting slot: %d\r\n", slot);
-   Blynk.virtualWrite(connectButton[slot],0);
+   Blynk.virtualWrite(connectButton[slot],LOW);
    KillSlot(slot);
    printf("Slot %d disconnected\r\n", slot+1);
 }
 
+void SetDebounceFlag()
+{
+    debounceFlag = true;	
+}
+
 void ConnectSlot(int slot, int pressed)
 {
-   printf("Connecting slot %d\r\n", slot);
+   printf("Connecting slot %d %d\r\n", slot,pressed);
 
    if (pressed)
    {
@@ -714,9 +723,16 @@ void ConnectSlot(int slot, int pressed)
    }
    else
    {	
+	//if (connectionParams[slot].isConnected == false ) 
+	//{
+	  if (debounceFlag)
+	  {
 	  KillSlot(slot);
       OpenSlot(slot);
 	  RouteSlot(slot);
+	  }
+	  debounceTimer = tmr.setTimeout(100,SetDebounceFlag);
+	  debounceFlag = false;
       tmr.deleteTimer(longPressTimer);
    }
 }

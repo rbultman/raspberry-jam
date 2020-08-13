@@ -2,7 +2,7 @@
 killall blynk
 killall jacktrip
 killall jackd
-xport JACK_NO_AUDIO_RESERVATION=1
+export JACK_NO_AUDIO_RESERVATION=1
 sudo service triggerhappy stop
 sudo service dbus stop
 sudo mount -o remount,size=128M /dev/shm

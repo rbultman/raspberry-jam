@@ -81,6 +81,7 @@ SessionInfo_T sessionInfo;
 std::vector<char *> sessionNames;
 
 int slotBeingEdited = -1;
+int slotBeingTested = -1;
 
 enum {
    EditMode_Idle,
@@ -194,9 +195,6 @@ BLYNK_CONNECTED() {
    Blynk.virtualWrite(editButton[0],0);
    Blynk.syncVirtual(editButton[0]);
    
-   Blynk.virtualWrite(ROUTING,0);
-   Blynk.syncVirtual(ROUTING);
-   
    Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
    
       // set connection states to off
@@ -214,6 +212,9 @@ BLYNK_CONNECTED() {
 	  Blynk.syncVirtual(ipPort[i]); //sync ip & port
       Blynk.syncVirtual(connectionName[i]); //sync connection name
 	  Blynk.syncVirtual(roleButton[i]); //sync Role
+	  Blynk.setProperty(editButton[i], "offLabel", "Edit");
+	  Blynk.setProperty(editButton[i], "onLabel", "Edit");
+	  Blynk.virtualWrite(editButton[i],0);
 	  	  
    }
 
@@ -911,10 +912,24 @@ void SetGainFromSlider(int gain)   //Get gain from the slider widget, apply to t
    eci_command(ecaCommand);
 }
 
-BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
+void StopClientTest()   //Check to see if a client is in test mode, if so disable the loopback
+{
+	char msg[100];
+	if (slotBeingTested != -1)
+	{
+		sprintf(msg,"jack_disconnect %s:receive_1 %s:send_1",connections[slotBeingTested].ipAddr,connections[slotBeingTested].ipAddr);  //disable loopback
+		printf ("slotbeing edited: %d, jack_disconnect %s:receive_1 %s:send_1\r\n",slotBeingTested,connections[slotBeingTested].ipAddr,connections[slotBeingTested].ipAddr);
+		system(msg);
+		Blynk.syncVirtual(gainSlider[slotBeingTested]);  // Set gain back to value from the slider
+		slotBeingTested = -1;
+	}
+}
+
+
+void LatencyTest () // Find latency, report in the app
 {
    
-	printf("Routing button selected: %s\n", param[0].asStr());
+	printf("Latenct test initiated");
 	char msg[100];
 	char buf[256];
 	char latency[24] = ""	;
@@ -927,18 +942,18 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 	uint8_t j;
 	char *ptr;
 		
-	if (param[0])
-	{
+
 		if (slotBeingEdited != -1) {    //Check that an edit button is pressed
 			if (connectionParams[slotBeingEdited].volumeIsEnabled) {  //Make sure the connection is active
 			
 				sprintf(msg, "c-select slot%d", slotBeingEdited);  //Turn down the gain to the outputs so you don't hear the test
 				eci_command(msg);
      			SetGainFromSlider(-100);
+				
 				printf("slot being edited roll: %d\r\n",connections[slotBeingEdited].role);
 				if (connections[slotBeingEdited].role == 0) {  					//If connection is a server
   
-					if ((fp = popen("unbuffer jack_iodelay", "r")) == NULL) {
+					if ((fp = popen("unbuffer jack_iodelay", "r")) == NULL) {   //Start jack_iodelay
 						printf("Error opening pipe!\n");
 						
 					}
@@ -974,7 +989,7 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 							latencyResult = true;
 						}						
 					}
-					if (latencyResult == false)
+					if (latencyResult == false)  //No latency data in the results
 					{
 						Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,"No latenct results");
 						Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"Is client in test mode?");
@@ -991,6 +1006,7 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 				    sprintf(msg,"Testing to %s",connections[slotBeingEdited].name);
 					Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,msg);
 					Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"Toggle Test to resume");
+					slotBeingTested = slotBeingEdited;
 					sprintf(msg,"jack_connect %s:receive_1 %s:send_1",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);  //establish loopback
 					printf ("jack_connect %s:receive_1 %s:send_1\r\n",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);
 					system(msg);
@@ -999,19 +1015,7 @@ BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
 				}
 			}
 		}	
-	}
-	else
-	{
-	//system("killall jack_iodelay");  // Stop jack io_delay
-	sprintf(msg,"jack_disconnect %s:receive_1 %s:send_1",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);  //disable loopback
-	printf ("slotbeing edited: %d, jack_disconnect %s:receive_1 %s:send_1\r\n",slotBeingEdited,connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);
-	system(msg);
-	if (slotBeingEdited != -1) {
-		Blynk.syncVirtual(gainSlider[slotBeingEdited]);  // Set gain back to value from the slider
-		}
-	ClearEditBoxes();
 
-	}
 }
 
 
@@ -1108,6 +1112,7 @@ static void EditButtonClicked(int slot, int state)
 
    printf("Slot %d edit button clicked.\r\n", slot);
    slotBeingEdited = slot;
+   StopClientTest();
    
    if (state)
    {
@@ -1125,8 +1130,9 @@ static void EditButtonClicked(int slot, int state)
 	  
 	  if (connectionParams[slot].volumeIsEnabled == true)
 		{
-		  Blynk.virtualWrite(ROUTING,state);
-		  Blynk.syncVirtual(ROUTING);
+		 // Blynk.virtualWrite(ROUTING,state);
+		 // Blynk.syncVirtual(ROUTING);
+		 LatencyTest();
 		}
 	   else
 	   {
@@ -1145,8 +1151,10 @@ static void EditButtonClicked(int slot, int state)
    else
    {
        printf("Slot being edited: %d\r\n",slotBeingEdited);
-	   Blynk.virtualWrite(ROUTING,state);
-	   Blynk.syncVirtual(ROUTING);
+	   //Blynk.virtualWrite(ROUTING,state);
+	   //Blynk.syncVirtual(ROUTING);
+	   
+	   ClearEditBoxes();
     }
 }
 
@@ -1208,6 +1216,7 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
 {
    int i;
    char buf[64];
+   StopClientTest();
 
    if(param[0])
    {

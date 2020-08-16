@@ -81,6 +81,7 @@ SessionInfo_T sessionInfo;
 std::vector<char *> sessionNames;
 
 int slotBeingEdited = -1;
+int slotBeingTested = -1;
 
 enum {
    EditMode_Idle,
@@ -97,11 +98,14 @@ BlynkSocket Blynk(_blynkTransport);
 
 char connectedSlots[64];
 bool myVolumeIsEnabled = false;
+bool debounceFlag = true;
 
 int longPressMillis = 2000;    // time in millis needed for longpress
 int longPressTimer;
 int pollTimeMillis = 1000;
 int pollTimer;
+int debounceTimer;
+
 
 FePi fePiCard;
 AudioInjector audioInjectorCard;
@@ -150,7 +154,9 @@ void SetSlotRole(uint8_t slot, uint8_t role);
 void KillSlot(int slot);
 void KillAllSlots();
 void OpenSlot(int slot);
+void RouteSlot(int slot);
 void initializeSoundCard();
+void ClearEditBoxes();
 
 static void PopulateSessionDropDown() {
    int i;
@@ -179,12 +185,6 @@ static void PopulateSessionDropDown() {
 
 BLYNK_CONNECTED() {
    int i;
-
-   system("export JACK_NO_AUDIO_RESERVATION=1");
-   system("sudo service triggerhappy stop");
-   system("sudo service dbus stop");
-   system("sudo mount -o remount,size=128M /dev/shm");
-   system("echo -n performance | sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
    
    // Sync buttons that control alsa first, don't need jack started for this
    Blynk.syncVirtual(INPUT_LEVEL); //sync input level on connection
@@ -192,7 +192,9 @@ BLYNK_CONNECTED() {
    Blynk.syncVirtual(INPUT_SELECT); //sync Input selection
    Blynk.syncVirtual(MIC_GAIN);  //sync Mic Gain
    
- 
+   Blynk.virtualWrite(editButton[0],0);
+   Blynk.syncVirtual(editButton[0]);
+   
    Blynk.syncVirtual(SAMPLE_RATE); //sync sample rate on connection
    
       // set connection states to off
@@ -204,11 +206,15 @@ BLYNK_CONNECTED() {
    //Sync Slot settings
 
    for (i=0; i<TOTAL_SLOTS; i++) {
+
 	  Blynk.syncVirtual(latencySlider[i]); //sync Latency
 	  Blynk.syncVirtual(gainSlider[i]); //sync Gain
 	  Blynk.syncVirtual(ipPort[i]); //sync ip & port
       Blynk.syncVirtual(connectionName[i]); //sync connection name
 	  Blynk.syncVirtual(roleButton[i]); //sync Role
+	  Blynk.setProperty(editButton[i], "offLabel", "Edit");
+	  Blynk.setProperty(editButton[i], "onLabel", "Edit");
+	  Blynk.virtualWrite(editButton[i],0);
 	  	  
    }
 
@@ -274,6 +280,7 @@ static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
       {
          KillSlot(slot);
          OpenSlot(slot);
+		 RouteSlot(slot);
       }
    }
 }
@@ -313,7 +320,7 @@ void PopulateUiWithSessionInfo()
 	  Blynk.virtualWrite(ipPort[i],ip_port);
       Blynk.virtualWrite(latencySlider[i], connections[i].latency);
       Blynk.virtualWrite(roleButton[i], connections[i].role);
-
+      Blynk.virtualWrite(gainSlider[i],connections[i].gain);
       Blynk.virtualWrite(editButton[i], LOW);
       Blynk.syncVirtual(editButton[i]);
       sprintf(label, "Connection %d", i);
@@ -534,6 +541,8 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
    }
    printf("%s \r\n",sampleRate[sessionInfo.sampleRate]);
    KillAllSlots();
+   eci_command("stop-sync");
+   eci_command("cs-disconnect");
    system("sudo killall jackd");
    system("jack_wait -q");  //This will wait until jackd is dead before continuing
    sprintf(jackCommand,"jackd -P70 -p32 -t2000 -d alsa -r%s -p64 -s -S &", sampleRate[sessionInfo.sampleRate]);
@@ -549,7 +558,7 @@ void OpenSlot(int slot)
 {
    char jacktripCommand[128];
 
-   Blynk.virtualWrite(connectButton[slot] ,HIGH);
+   //Blynk.virtualWrite(connectButton[slot] ,HIGH);
    sprintf(connections[slot].jacktripKillSearch, "[j]acktrip -o%d -n1 -z -%s -q%s --nojackportsconnect", 
          connections[slot].portOffset, 
          connectionParams[slot].connectionType, 
@@ -584,12 +593,15 @@ void KillSlot(int slot)
 
    Blynk.virtualWrite(connectButton[slot] ,LOW);
    connectionParams[slot].volumeIsEnabled = false;
+   Blynk.setProperty(editButton[slot], "offLabel", "Edit");
+   Blynk.setProperty(editButton[slot], "onLabel", "Edit");
    //send kill command
    sprintf(killcmd, "kill `ps aux | grep \"%s\" | awk '{print $2}'`", connections[slot].jacktripKillSearch);
    printf("kill cmd = %s\r\n", killcmd);
    system(killcmd);
    connectionParams[slot].isConnected = false;
    connectionParams[slot].pollForClient = false;
+   connectionParams[slot].volumeIsEnabled = false;
    StopTimerIfConnectionsResolved();
    // sleep a little so the process dies and jackd recovers
    sleep_millis(250);
@@ -614,6 +626,11 @@ void PollForClient()
 				printf("===> Exit Code: %d\r\n",ret);
 				if (ret == 0) {
 				connectionParams[i].pollForClient = false;
+				connectionParams[i].volumeIsEnabled = true;
+				Blynk.setProperty(editButton[i], "offLabel", "Test");
+				Blynk.setProperty(editButton[i], "onLabel", "Test");
+				sprintf(ecaCommand,"jack_connect system:capture_1 slot%d:send_1",i);
+				system(ecaCommand);
 				StopTimerIfConnectionsResolved();
 				printf("Slot %d routed\r\n",i);
 				}
@@ -652,8 +669,14 @@ void RouteSlot(int slot)
 				}
 			}
 			connectionParams[slot].volumeIsEnabled = true;
+			Blynk.setProperty(editButton[slot], "offLabel", "Test");
+			Blynk.setProperty(editButton[slot], "onLabel", "Test");
+			//Blynk.virtualWrite(connectButton[slot] ,HIGH);
+			sprintf(ecaCommand,"jack_connect %s:send_1 system:capture_1",connections[slot].ipAddr);
+			system(ecaCommand);
 		
 		}
+	Blynk.virtualWrite(connectButton[slot] ,HIGH);
 }
 
 void RouteAllSlots()
@@ -687,23 +710,36 @@ void DisconnectSlot(void *pSlot)
    uint32_t slot = (uint32_t)pSlot;
 
    printf("Disconnecting slot: %d\r\n", slot);
+   Blynk.virtualWrite(connectButton[slot],LOW);
    KillSlot(slot);
    printf("Slot %d disconnected\r\n", slot+1);
 }
 
+void SetDebounceFlag()
+{
+    debounceFlag = true;	
+}
+
 void ConnectSlot(int slot, int pressed)
 {
-   printf("Connecting slot %d\r\n", slot);
+   printf("Connecting slot %d %d\r\n", slot,pressed);
 
    if (pressed)
    {
-      KillSlot(slot);
-      OpenSlot(slot);
-	  RouteSlot(slot);
       longPressTimer = tmr.setTimeout(longPressMillis, DisconnectSlot, (void *)slot);
    }
    else
    {	
+	//if (connectionParams[slot].isConnected == false ) 
+	//{
+	  if (debounceFlag)
+	  {
+	  KillSlot(slot);
+      OpenSlot(slot);
+	  RouteSlot(slot);
+	  }
+	  debounceTimer = tmr.setTimeout(100,SetDebounceFlag);
+	  debounceFlag = false;
       tmr.deleteTimer(longPressTimer);
    }
 }
@@ -765,6 +801,7 @@ void SetSlotRole(uint8_t slot, uint8_t role)
    if (restartNeeded)
    {
       OpenSlot(slot);
+	  RouteSlot(slot);
    }
 }
 
@@ -866,20 +903,6 @@ BLYNK_WRITE(MIC_GAIN) //Mic Gain
    }
 }
 
-
-
-BLYNK_WRITE(ROUTING) // Ecasound setup/start/stop
-{
-   char ecaCommand[100];
-   
-	printf("Routing button selected: %s\n", param[0].asStr());
-	uint8_t i;
-	if (param[0])
-	{
-		RouteAllSlots();
-	}
-}
-
 void SetGainFromSlider(int gain)   //Get gain from the slider widget, apply to the gain control in ecasound
 {
    char ecaCommand[100];
@@ -888,6 +911,113 @@ void SetGainFromSlider(int gain)   //Get gain from the slider widget, apply to t
    printf("Gain: %s\n",ecaCommand);
    eci_command(ecaCommand);
 }
+
+void StopClientTest()   //Check to see if a client is in test mode, if so disable the loopback
+{
+	char msg[100];
+	if (slotBeingTested != -1)
+	{
+		sprintf(msg,"jack_disconnect %s:receive_1 %s:send_1",connections[slotBeingTested].ipAddr,connections[slotBeingTested].ipAddr);  //disable loopback
+		printf ("slotbeing edited: %d, jack_disconnect %s:receive_1 %s:send_1\r\n",slotBeingTested,connections[slotBeingTested].ipAddr,connections[slotBeingTested].ipAddr);
+		system(msg);
+		Blynk.syncVirtual(gainSlider[slotBeingTested]);  // Set gain back to value from the slider
+		slotBeingTested = -1;
+	}
+}
+
+
+void LatencyTest () // Find latency, report in the app
+{
+   
+	printf("Latenct test initiated");
+	char msg[100];
+	char buf[256];
+	char latency[24] = ""	;
+	float latencyValue;
+	FILE *fp;
+	int status;
+	int ret;
+	bool latencyResult = false;
+	uint8_t i;
+	uint8_t j;
+	char *ptr;
+		
+
+		if (slotBeingEdited != -1) {    //Check that an edit button is pressed
+			if (connectionParams[slotBeingEdited].volumeIsEnabled) {  //Make sure the connection is active
+			
+				sprintf(msg, "c-select slot%d", slotBeingEdited);  //Turn down the gain to the outputs so you don't hear the test
+				eci_command(msg);
+     			SetGainFromSlider(-100);
+				
+				printf("slot being edited roll: %d\r\n",connections[slotBeingEdited].role);
+				if (connections[slotBeingEdited].role == 0) {  					//If connection is a server
+  
+					if ((fp = popen("unbuffer jack_iodelay", "r")) == NULL) {   //Start jack_iodelay
+						printf("Error opening pipe!\n");
+						
+					}
+					sprintf(msg,"jack_connect slot%d:send_1 jack_delay:out",slotBeingEdited);  //Connect jack io_delay
+					printf("jack_connect slot%d:send_1 jack_delay:out\r\n",slotBeingEdited);
+					ret = 1;
+					while (ret == 1){  //repeat connection attempt until successful
+					status = system(msg);
+					if (status != -1) { // -1 means an error with the call itself
+						ret = WEXITSTATUS(status);  //get exit code from system command
+						printf("===> Exit Code: %d\r\n",ret);
+						}
+					}
+					
+					sprintf(msg,"jack_connect slot%d:receive_1 jack_delay:in",slotBeingEdited);
+					printf("jack_connect slot%d:receive_1 jack_delay:in\r\n",slotBeingEdited);
+					system(msg);
+
+					for (j=1;j<11;j++)
+					{	
+						fgets(buf, 256, fp); 
+						ptr = strstr(buf," ms ");
+						if (ptr != NULL)
+						{
+							strncpy(latency,ptr - 8,12);
+							latencyValue = strtof(latency, NULL);
+							latencyValue = latencyValue/2;
+							sprintf(msg,"%.3f ms",latencyValue);
+							Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,msg);
+							sprintf(msg,"Latency to %s:",connections[slotBeingEdited].name);
+							Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,msg);
+							printf("%s \r\n",latency);
+							latencyResult = true;
+						}						
+					}
+					if (latencyResult == false)  //No latency data in the results
+					{
+						Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,"No latenct results");
+						Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"Is client in test mode?");
+					}
+					system("killall jack_iodelay");
+					pclose(fp);
+					Blynk.virtualWrite(editButton[0],0);
+					Blynk.syncVirtual(gainSlider[slotBeingEdited]);  // Set gain back to value from the slider
+					slotBeingEdited = -1;
+					
+				}
+				else  //Connection is a client
+				{
+				    sprintf(msg,"Testing to %s",connections[slotBeingEdited].name);
+					Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,msg);
+					Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"Toggle Test to resume");
+					slotBeingTested = slotBeingEdited;
+					sprintf(msg,"jack_connect %s:receive_1 %s:send_1",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);  //establish loopback
+					printf ("jack_connect %s:receive_1 %s:send_1\r\n",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);
+					system(msg);
+					
+					
+				}
+			}
+		}	
+
+}
+
 
 void GainSliderChanged(int slider, int value)
 {
@@ -923,6 +1053,7 @@ void ClearEditBoxes() {
    Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX,"label"," ");  //clear right edit field label
    Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"\r");        //clear right edit field data
    editMode = EditMode_Idle;
+   slotBeingEdited = -1;
 }
 
 BLYNK_WRITE(LEFT_EDIT_FIELD_TEXT_BOX) //Left edit field
@@ -980,10 +1111,12 @@ static void EditButtonClicked(int slot, int state)
    int i;
 
    printf("Slot %d edit button clicked.\r\n", slot);
-
+   slotBeingEdited = slot;
+   StopClientTest();
+   
    if (state)
    {
-      slotBeingEdited = slot;
+      
 
 	   //Turn off any other active edit buttons or the 'save session' button
       for(i=0; i<TOTAL_SLOTS; i++) {
@@ -992,7 +1125,17 @@ static void EditButtonClicked(int slot, int state)
          }
       }
       Blynk.virtualWrite(SESSION_SAVE_BUTTON, LOW);
-
+	  
+      printf ("Slot %d test: %d\r\n",slot,connectionParams[slot].volumeIsEnabled);
+	  
+	  if (connectionParams[slot].volumeIsEnabled == true)
+		{
+		 // Blynk.virtualWrite(ROUTING,state);
+		 // Blynk.syncVirtual(ROUTING);
+		 LatencyTest();
+		}
+	   else
+	   {
       editMode = EditMode_Connection;
 
 		//Store this button as the currently active edit button
@@ -1003,11 +1146,16 @@ static void EditButtonClicked(int slot, int state)
 		Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "IP_ADRESS:Port_Offset");                     //Populate the label for the right edit field
       sprintf(msg, "%s:%d", connections[slot].ipAddr, connections[slot].portOffset);
 		Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, msg);                              //Seed the data for the right edit field
+	   }
    }
    else
    {
-      ClearEditBoxes();
-   }
+       printf("Slot being edited: %d\r\n",slotBeingEdited);
+	   //Blynk.virtualWrite(ROUTING,state);
+	   //Blynk.syncVirtual(ROUTING);
+	   
+	   ClearEditBoxes();
+    }
 }
 
 BLYNK_WRITE(SLOT1_EDIT_BUTTON) //Connection 1 Edit button
@@ -1068,6 +1216,7 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
 {
    int i;
    char buf[64];
+   StopClientTest();
 
    if(param[0])
    {

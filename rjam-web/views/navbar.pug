@@ -1,9 +1,10 @@
 mixin navbar(whichActive)
   div(class="container" id="navbar-container")
-    nav(class="navbar navbar-expand-lg navbar-light" style="background-color: #C0C0C0")
-      button(class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation") 
+    nav(class="navbar navbar-expand-lg navbar-light" style="background-color: #E0E0E0")
+      div(class="navbar-toggler" aria-expanded="false" id="navbarTitle")= whichActive
+      button(class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup navbarTitle" aria-expanded="false" aria-label="Toggle navigation") 
         span(class="navbar-toggler-icon")
       div(class="collapse navbar-collapse" id="navbarNavAltMarkup")
         div(class="navbar-nav")
-          a(class="nav-link" id="sessionMenu" href="#") Session
+          a(class="nav-link" id="sessionMenu" href="session") Session
           a(class="nav-link" id="configureMenu" href="config") Configure

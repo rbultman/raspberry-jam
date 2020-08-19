@@ -1,0 +1,10 @@
+extends layout
+include navbar.pug
+
+block content
+  +navbar('Session')
+  p A placeholder for session info
+
+  script.
+    var config = document.getElementById('sessionMenu');
+    if (config != null) config.classList.add("active");

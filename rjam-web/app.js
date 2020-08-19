@@ -7,6 +7,7 @@ var logger = require('morgan');
 const bodyParser = require('body-parser');
 
 var indexRouter = require('./routes/index');
+var sessionRouter = require('./routes/session');
 
 var app = express();
 
@@ -24,6 +25,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use('/', indexRouter);
 app.use('/config', indexRouter);
+app.use('/session', sessionRouter);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

@@ -1090,6 +1090,7 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) // Right edit field
       p = strtok(NULL, ":");
       if (p == NULL) return;
       connections[slotBeingEdited].portOffset = strtol(p, NULL, 10);
+      connections[slotBeingEdited].slot = slotBeingEdited;
 
       sprintf(buf, "%s:%d", connections[slotBeingEdited].ipAddr, connections[slotBeingEdited].portOffset);
 

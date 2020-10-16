@@ -8,7 +8,7 @@
 
 CC ?= gcc
 CXX ?= g++
-CXXFLAGS += -I blynk-library/src/ -I blynk-library/linux/ -DLINUX
+CXXFLAGS += -I blynk-library/src/ -I blynk-library/linux/ -I Timer/ -DLINUX
 LDFLAGS += -lrt -lpthread -lecasoundc -lsqlite3
 
 ifeq ($(build),debug)
@@ -53,6 +53,7 @@ SOURCES=main.cpp \
 	utility.cpp \
 	settings.cpp \
 	rjam_api.cpp \
+	Timer/Timer.cpp \
 	blynk-library/src/utility/BlynkDebug.cpp \
 	blynk-library/src/utility/BlynkHandlers.cpp \
 	blynk-library/src/utility/BlynkTimer.cpp

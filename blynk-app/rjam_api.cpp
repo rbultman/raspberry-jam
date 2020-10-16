@@ -4,6 +4,7 @@
    An API for controlling Raspberry Jam from various UIs
 */
 
+#include <libecasoundc/ecasoundc.h>
 #include "settings.h"
 #include "rjam_api.h"
 #include "fe-pi-def.h"
@@ -139,4 +140,13 @@ void RjamApi_ChangeMicGain()
 const char * RjamApi_GetMicGain()
 {
    return soundcard->micGainText[sessionInfo.micBoost];
+}
+
+void RjamApi_SetGain(int gain)
+{
+   char ecaCommand[100];
+
+   sprintf(ecaCommand,"cop-set 1,1,%d",gain);
+   printf("Gain: %s\n",ecaCommand);
+   eci_command(ecaCommand);
 }

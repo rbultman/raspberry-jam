@@ -15,6 +15,7 @@ void RjamApi_InitializeSoundCard();
 void RjamApi_InputSelect(int input);
 void RjamApi_ChangeMicGain();
 const char * RjamApi_GetMicGain();
+void RjamApi_SetGain(int gain);
 
 extern SessionInfo_T sessionInfo;
 

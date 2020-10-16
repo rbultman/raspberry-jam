@@ -793,11 +793,7 @@ BLYNK_WRITE(MIC_GAIN) //Mic Gain
 
 void SetGainFromSlider(int gain)   //Get gain from the slider widget, apply to the gain control in ecasound
 {
-   char ecaCommand[100];
-
-   sprintf(ecaCommand,"cop-set 1,1,%d",gain);
-   printf("Gain: %s\n",ecaCommand);
-   eci_command(ecaCommand);
+   RjamApi_SetGain(gain);
 }
 
 void StopClientTest()   //Check to see if a client is in test mode, if so disable the loopback

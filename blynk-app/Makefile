@@ -52,6 +52,7 @@ SOURCES=main.cpp \
 	session_db.cpp \
 	utility.cpp \
 	settings.cpp \
+	rjam_api.cpp \
 	blynk-library/src/utility/BlynkDebug.cpp \
 	blynk-library/src/utility/BlynkHandlers.cpp \
 	blynk-library/src/utility/BlynkTimer.cpp

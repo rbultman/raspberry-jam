@@ -24,14 +24,11 @@
 #include <ctype.h>
 #include "session_db.h"
 #include "pinDefs.h"
-#include "sessionInfo.h"
 #include "utility.h"
-#include "fe-pi-def.h"
-#include "audio-injector-def.h"
-#include "HIFI_DAC_ADC_DEF.h"
 #include "settings.h"
+#include "config.h"
+#include "rjam_api.h"
 
-#define TOTAL_SLOTS 3
 #define ECA_CHANNEL_OFFSET 2
 
 int connectButton[TOTAL_SLOTS] = {
@@ -77,7 +74,6 @@ int connectionName[TOTAL_SLOTS] = {
 };
 
 ConnectionInfo_T connections[TOTAL_SLOTS];
-SessionInfo_T sessionInfo;
 std::vector<char *> sessionNames;
 
 int slotBeingEdited = -1;
@@ -105,12 +101,6 @@ int longPressTimer;
 int pollTimeMillis = 1000;
 int pollTimer;
 int debounceTimer;
-
-
-FePi fePiCard;
-AudioInjector audioInjectorCard;
-HifiberryDacPlusAdc hifiberryDacPlusAdc ;
-SoundcardInterface *soundcard;
 
 static const char *rxBufferSize[] = {
    "2",
@@ -155,7 +145,6 @@ void KillSlot(int slot);
 void KillAllSlots();
 void OpenSlot(int slot);
 void RouteSlot(int slot);
-void initializeSoundCard();
 void ClearEditBoxes();
 
 static void PopulateSessionDropDown() {
@@ -227,44 +216,12 @@ BLYNK_CONNECTED() {
 
 BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
 {
-   char mixCommand[100];
-
-   if (soundcard == NULL)
-   {
-      puts("Can't set output level, soundcard is not initialized.");
-      return;
-   }
-   
-   sessionInfo.outputLevel = param[0].asInt();
-
-   if(soundcard->mixMasterCommand)
-   {
-      printf("New output level: %s\n", param[0].asStr());
-      sprintf(mixCommand, "amixer -M set %s %s%%", soundcard->mixMasterCommand, param[0].asStr());
-      printf("%s\r\n",mixCommand);
-      system(mixCommand);
-   }
+   RjamApi_SetOutputLevel(param[0].asInt());
 }
 
 BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
 {
-   char mixCommand[100];
-   
-   if (soundcard == NULL)
-   {
-      puts("Can't set input level, soundcard is not initialized.");
-      return;
-   }
-   
-   sessionInfo.inputLevel = param[0].asInt();
-
-   if(soundcard->mixCaptureCommand)
-   {
-      printf("New input level: %s\n", param[0].asStr());
-      sprintf(mixCommand, "amixer -M set %s %s%%", soundcard->mixCaptureCommand, param[0].asStr());
-      printf("%s\r\n",mixCommand);
-      system(mixCommand);
-   }
+   RjamApi_SetInputLevel(param[0].asInt());
 }
 
 static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
@@ -280,7 +237,7 @@ static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
       {
          KillSlot(slot);
          OpenSlot(slot);
-		 RouteSlot(slot);
+		   RouteSlot(slot);
       }
    }
 }
@@ -820,86 +777,17 @@ BLYNK_WRITE(SLOT3_ROLE_BUTTON) //Connection 3 Connection Type
    SetSlotRole(2, param[0].asInt());
 }
 
-// BLYNK_WRITE(SOUNDCARD) //Soundcard Selection
-void initializeSoundCard()
-{
-   int card = GetSelectedSoundcard();
-
-   printf("Sound card selection: %d\r\n", card);
-
-   switch (card)
-   {
-      case 1: // Fe-Pi
-         fePiCard.Initialize();
-         soundcard = &fePiCard;
-         break;
-      case 2: // Audio Injector Stereo
-         audioInjectorCard.Initialize();
-         soundcard = &audioInjectorCard;
-         break;
-      case 3: // Hifiberry DAC +ADC
-         hifiberryDacPlusAdc.Initialize();
-         soundcard = &hifiberryDacPlusAdc;
-         break;
-      default:
-         soundcard = NULL;
-         printf("Unknown sound card selected \r\n");
-   }
-}
-
 BLYNK_WRITE(INPUT_SELECT) //Input Selection
 {
-
-   if (soundcard == NULL)
-   {
-      puts("Can't change the input source, soundcard is not initialized.");
-      return;
-   }
-
-   printf("New input selected: %s\n", param[0].asStr());
-   sessionInfo.inputSelect = param[0];
-
-   if (param[0])
-   {
-      if (soundcard->inputMicCommand)
-      {
-         system(soundcard->inputMicCommand);
-      }
-   }
-   else
-   {
-      if (soundcard->inputLineCommand)
-      {
-         system(soundcard->inputLineCommand);
-      }
-   }
+   RjamApi_InputSelect(param[0].asInt());
 }
 
 BLYNK_WRITE(MIC_GAIN) //Mic Gain
 {
-   char mixCommand[100];
-
-   if (soundcard == NULL)
-   {
-      puts("Can't change the mic gain, soundcard is not initialized.");
-      return;
-   }
-
    if (param[0])
    {
-      if (soundcard->micGainText && soundcard->micGainCommand)
-      {
-         sessionInfo.micBoost++;
-         if (sessionInfo.micBoost >= soundcard->micGainSettingsCount)
-         {
-            sessionInfo.micBoost = 0;
-         }
-
-         Blynk.setProperty(MIC_GAIN,"offLabel", soundcard->micGainText[sessionInfo.micBoost]);
-         sprintf(mixCommand, "%s %u", soundcard->micGainCommand, sessionInfo.micBoost);
-         printf("Mic gain command: %s\r\n", mixCommand);
-         system(mixCommand);
-      }
+      RjamApi_ChangeMicGain();
+      Blynk.setProperty(MIC_GAIN,"offLabel", RjamApi_GetMicGain());
    }
 }
 
@@ -1356,7 +1244,7 @@ BLYNK_WRITE(SLOT3_IP_PORT)
 
 void setup(const char *auth, const char *serv, uint16_t port)
 {
-   initializeSoundCard();
+   RjamApi_InitializeSoundCard();
    eci_init();	//Initialize Ecasound
    pollTimer = tmr.setInterval(pollTimeMillis, PollForClient);
    tmr.disable(pollTimer);

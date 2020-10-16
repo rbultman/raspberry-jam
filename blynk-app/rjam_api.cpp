@@ -57,7 +57,7 @@ void RjamApi_SetOutputLevel(int level)
 
    if(soundcard->mixMasterCommand)
    {
-      printf("New output level: %d\n", level;
+      printf("New output level: %d\n", level);
       sprintf(mixCommand, "amixer -M set %s %d%%", soundcard->mixMasterCommand, level);
       printf("%s\r\n",mixCommand);
       system(mixCommand);
@@ -130,7 +130,6 @@ void RjamApi_ChangeMicGain()
          sessionInfo.micBoost = 0;
       }
 
-      Blynk.setProperty(MIC_GAIN,"offLabel", soundcard->micGainText[sessionInfo.micBoost]);
       sprintf(mixCommand, "%s %u", soundcard->micGainCommand, sessionInfo.micBoost);
       printf("Mic gain command: %s\r\n", mixCommand);
       system(mixCommand);

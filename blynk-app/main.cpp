@@ -60,18 +60,6 @@ int gainSlider[TOTAL_SLOTS] = {
    SLOT3_GAIN_SLIDER,
 };
 
-int ipPort[TOTAL_SLOTS] = {
-   SLOT1_IP_PORT,
-   SLOT2_IP_PORT,
-   SLOT3_IP_PORT,
-};
-
-int connectionName[TOTAL_SLOTS] = {
-   SLOT1_CONNECTION_NAME,
-   SLOT2_CONNECTION_NAME,
-   SLOT3_CONNECTION_NAME,
-};
-
 static std::vector<char *> sessionNames;
 
 int slotBeingEdited = -1;
@@ -158,8 +146,6 @@ BLYNK_CONNECTED() {
 
 	  Blynk.syncVirtual(latencySlider[i]); //sync Latency
 	  Blynk.syncVirtual(gainSlider[i]); //sync Gain
-	  Blynk.syncVirtual(ipPort[i]); //sync ip & port
-      Blynk.syncVirtual(connectionName[i]); //sync connection name
 	  Blynk.syncVirtual(roleButton[i]); //sync Role
 	  Blynk.setProperty(editButton[i], "offLabel", "Edit");
 	  Blynk.setProperty(editButton[i], "onLabel", "Edit");
@@ -189,7 +175,7 @@ static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
    printf("Latency set for slot %d\r\n", slot);
    if (RjamApi_SetLatencyForSlot(slot, latency))
    {
-      if (connections[slot].role!=0)   //If this slot is not a server
+      if (RjamApi_GetSlotRole(slot) == ClientRole)
       {
          setEditButtonLabels(slot);
       }
@@ -222,15 +208,13 @@ void PopulateUiWithSessionInfo()
    for (i=0; i<TOTAL_SLOTS; i++) 
    {
       // set parameters
-      SetSlotRole(i, connections[i].role);
+      SetSlotRole(i, RjamApi_GetSlotRole(i));
 
-      Blynk.setProperty(connectButton[i], "label", connections[i].name);
-	  Blynk.virtualWrite(connectionName[i],connections[i].name);
-      sprintf(ip_port, "%s:%d", connections[i].ipAddr, connections[i].portOffset);
+      Blynk.setProperty(connectButton[i], "label", RjamApi_GetSlotName(i));
+      sprintf(ip_port, "%s:%d", connections[i].ipAddr, RjamApi_GetSlotPortOffset(i));
       Blynk.setProperty(roleButton[i], "label", ip_port);
-	  Blynk.virtualWrite(ipPort[i],ip_port);
       Blynk.virtualWrite(latencySlider[i], connections[i].latency);
-      Blynk.virtualWrite(roleButton[i], connections[i].role);
+      Blynk.virtualWrite(roleButton[i], RjamApi_GetSlotRole(i));
       Blynk.virtualWrite(gainSlider[i],connections[i].gain);
       Blynk.virtualWrite(editButton[i], LOW);
       Blynk.syncVirtual(editButton[i]);
@@ -254,26 +238,7 @@ void PopulateUiWithSessionInfo()
 
 void PopulateNewSession() 
 {
-   int i;
-
-   strcpy(sessionInfo.name, "New Session");
-   sessionInfo.inputLevel = 50;
-   sessionInfo.outputLevel = 50;
-   sessionInfo.sampleRate = 2;
-   sessionInfo.monitorGain = 0;
-   sessionInfo.inputSelect = 0;
-   sessionInfo.micBoost = 0;
-
-   for (i=0; i<TOTAL_SLOTS; i++) {
-      sprintf(connections[i].name, "User %d", i);
-      sprintf(connections[i].ipAddr, "127.0.0.%d", i);
-      connections[i].portOffset = i*10;
-      connections[i].role = 0;
-      connections[i].latency = 4;
-      connections[i].gain = 0;
-      connections[i].slot = i;
-   }
-
+   RjamApi_CreateNewSession();
    PopulateUiWithSessionInfo();
 }
 
@@ -325,7 +290,6 @@ BLYNK_WRITE(SESSION_DROP_DOWN) // Sessions Book
 
 BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
 {
-   char jackCommand[128] = "jackd";
    int8_t newSampleRate = param.asInt() - 1;
 
    printf("New sample rate: %d\r\n", newSampleRate);
@@ -350,11 +314,11 @@ void RouteSlot(int slot)
 {
    RjamApi_RouteSlot(slot);
 
-   if (connections[slot].role!=0)   //If this slot is not a server
+   if (RjamApi_GetSlotRole(slot) == ClientRole)
    {
       setEditButtonLabels(slot);
    }
-   Blynk.virtualWrite(connectButton[slot] ,HIGH);
+   Blynk.virtualWrite(connectButton[slot], HIGH);
 }
 
 void RouteAllSlots()
@@ -363,7 +327,7 @@ void RouteAllSlots()
 
    for(i=0; i<TOTAL_SLOTS; i++)
    {
-      if (connectionParams[i].isConnected)
+      if (RjamApi_isConnected(i))
       {
          RouteSlot(i);
       }
@@ -376,7 +340,7 @@ void KillAllSlots()
 
    for(i=0; i<TOTAL_SLOTS; i++)
    {
-      if (connectionParams[i].isConnected)
+      if (RjamApi_isConnected(i))
       {
          KillSlot(i);
       }
@@ -450,18 +414,18 @@ void SetSlotIpAddress(uint8_t slot, const char *newIp) {
 
 void SetSlotRole(uint8_t slot, uint8_t role)
 {
-   bool restartNeeded = false;
+   bool updateLabels = false;
 
    printf("New role for slot %d: %d\n", slot, role);
-   if (connectionParams[slot].isConnected)
+   if (RjamApi_isConnected(slot))
    {
-      restartNeeded = true;
+      updateLabels = true;
    }
    RjamApi_SetSlotRole(slot, role);
-   printf("Slot %d connection type is now: %s\r\n", slot, connectionParams[slot].connectionType);
-   if (restartNeeded)
+   printf("Slot %d connection type is now: %s\r\n", slot, RjamApi_GetConnectionType(slot));
+   if (updateLabels)
    {
-      if (connections[slot].role!=0)   //If this slot is not a server
+      if (RjamApi_GetSlotRole(slot) == ClientRole)
       {
          setEditButtonLabels(slot);
       }
@@ -529,14 +493,14 @@ void LatencyTest () // Find latency, report in the app
 
 
    if (slotBeingEdited != -1) {    //Check that an edit button is pressed
-      if (connectionParams[slotBeingEdited].volumeIsEnabled) {  //Make sure the connection is active
+      if (RjamApi_VolumeIsEnabled(slotBeingEdited)) {  //Make sure the connection is active
 
          sprintf(msg, "c-select slot%d", slotBeingEdited);  //Turn down the gain to the outputs so you don't hear the test
          eci_command(msg);
          RjamApi_SetSlotGain(slotBeingEdited, -100);
 
-         printf("slot being edited roll: %d\r\n",connections[slotBeingEdited].role);
-         if (connections[slotBeingEdited].role == 0) {  					//If connection is a server
+         printf("slot being edited roll: %d\r\n", RjamApi_GetSlotRole(slotBeingEdited));
+         if (RjamApi_GetSlotRole(slotBeingEdited) == ServerRole) {  					//If connection is a server
 
             if ((fp = popen("unbuffer jack_iodelay", "r")) == NULL) {   //Start jack_iodelay
                printf("Error opening pipe!\n");
@@ -568,7 +532,7 @@ void LatencyTest () // Find latency, report in the app
                   latencyValue = latencyValue/2;
                   sprintf(msg,"%.3f ms",latencyValue);
                   Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,msg);
-                  sprintf(msg,"Latency to %s:",connections[slotBeingEdited].name);
+                  sprintf(msg,"Latency to %s:",RjamApi_GetSlotName(slotBeingEdited));
                   Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,msg);
                   printf("%s \r\n",latency);
                   latencyResult = true;
@@ -588,7 +552,7 @@ void LatencyTest () // Find latency, report in the app
          }
          else  //Connection is a client
          {
-            sprintf(msg,"Testing to %s",connections[slotBeingEdited].name);
+            sprintf(msg,"Testing to %s",RjamApi_GetSlotName(slotBeingEdited));
             Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,msg);
             Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"Toggle Test to resume");
             slotBeingTested = slotBeingEdited;
@@ -637,10 +601,8 @@ BLYNK_WRITE(LEFT_EDIT_FIELD_TEXT_BOX) //Left edit field
 	//check currently active edit button, if none are active do nothing, if 'save session' is active do nothing
 	//for the 3 slot edit buttons, write the new name, somthing like the next 2 lines only slot dependent?
    if (editMode == EditMode_Connection) {
-      strcpy(connections[slotBeingEdited].name, param[0].asStr());  //write new user name for active slot
-      TrimWhitespace(connections[slotBeingEdited].name);
-      Blynk.setProperty(connectButton[slotBeingEdited], "label", connections[slotBeingEdited].name); // Write user name as label to connect button for active slot
-	  Blynk.virtualWrite(connectionName[slotBeingEdited], connections[slotBeingEdited].name);
+      RjamApi_SetSlotName(slotBeingEdited, param[0].asStr());
+      Blynk.setProperty(connectButton[slotBeingEdited], "label", RjamApi_GetSlotName(slotBeingEdited)); // Write user name as label to connect button for active slot
    }
 }
 
@@ -663,13 +625,12 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) // Right edit field
       // find offset
       p = strtok(NULL, ":");
       if (p == NULL) return;
-      connections[slotBeingEdited].portOffset = strtol(p, NULL, 10);
+      RjamApi_SetSlotPortOffset(slotBeingEdited, strtol(p, NULL, 10));
       connections[slotBeingEdited].slot = slotBeingEdited;
 
-      sprintf(buf, "%s:%d", connections[slotBeingEdited].ipAddr, connections[slotBeingEdited].portOffset);
+      sprintf(buf, "%s:%d", connections[slotBeingEdited].ipAddr, RjamApi_GetSlotPortOffset(slotBeingEdited));
 
       Blynk.setProperty(roleButton[slotBeingEdited], "label", buf);
-      Blynk.virtualWrite(ipPort[slotBeingEdited], buf);
    } else if (editMode == EditMode_Session) {
       // get it
       strcpy(sessionInfo.name, param[0].asStr());
@@ -699,9 +660,10 @@ static void EditButtonClicked(int slot, int state)
       }
       Blynk.virtualWrite(SESSION_SAVE_BUTTON, LOW);
 
-      printf ("Slot %d test: %d\r\n",slot,connectionParams[slot].volumeIsEnabled);
 
-      if (connectionParams[slot].volumeIsEnabled == true)
+      printf ("Slot %d test: %d\r\n", slot, RjamApi_VolumeIsEnabled(slot));
+
+      if (RjamApi_VolumeIsEnabled(slot) == true)
       {
          LatencyTest();
       }
@@ -712,10 +674,10 @@ static void EditButtonClicked(int slot, int state)
          //Store this button as the currently active edit button
          sprintf(msg, "NAME Connection %d", slot+1);
          Blynk.setProperty(LEFT_EDIT_FIELD_TEXT_BOX, "label", msg);  //Populate the label for the left edit field
-         Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, connections[slot].name);										  //Seed the data for the left edit field
+         Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, RjamApi_GetSlotName(slot));										  //Seed the data for the left edit field
 
          Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "IP_ADRESS:Port_Offset");                     //Populate the label for the right edit field
-         sprintf(msg, "%s:%d", connections[slot].ipAddr, connections[slot].portOffset);
+         sprintf(msg, "%s:%d", connections[slot].ipAddr, RjamApi_GetSlotPortOffset(i));
          Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, msg);                              //Seed the data for the right edit field
       }
    }
@@ -840,57 +802,6 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
          }
       }
    }
-}
-
-BLYNK_WRITE(SLOT1_CONNECTION_NAME)
-{
-	printf("Slot 0 name %s \r\n",param[0].asStr());
-	strcpy(connections[0].name, param[0].asStr());
-}
-
-BLYNK_WRITE(SLOT2_CONNECTION_NAME)
-{
-	printf("Slot 1 name %s \r\n",param[0].asStr());
-	strcpy(connections[1].name, param[0].asStr());
-}
-
-BLYNK_WRITE(SLOT3_CONNECTION_NAME)
-{
-	printf("Slot 2 name %s \r\n",param[0].asStr());
-	strcpy(connections[2].name, param[0].asStr());
-}
-
-void SetSlotIpPort(int slot, const char *pIpPort)
-{
-	char *p;
-	char buf[64];
-
-    strcpy(buf, pIpPort);
-
-    // find ip address
-    p = strtok(buf, ":");
-    if (p == NULL) return;
-	strcpy(connections[slot].ipAddr, p);
-
-      // find offset
-    p = strtok(NULL, ":");
-    if (p == NULL) return;
-    connections[slot].portOffset = strtol(p, NULL, 10);
-}
-
-BLYNK_WRITE(SLOT1_IP_PORT)
-{
-   SetSlotIpPort(0, param[0].asStr());
-}
-
-BLYNK_WRITE(SLOT2_IP_PORT)
-{
-   SetSlotIpPort(1, param[0].asStr());
-}
-
-BLYNK_WRITE(SLOT3_IP_PORT)
-{
-   SetSlotIpPort(2, param[0].asStr());
 }
 
 static void setEditButtonLabels(int slot)

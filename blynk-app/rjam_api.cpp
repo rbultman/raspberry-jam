@@ -27,7 +27,14 @@ const char *sampleRate[SAMPLE_RATE_COUNT] = {
    "96000",
 };
 
-JacktripParams connectionParams[TOTAL_SLOTS] = {
+typedef struct JacktripParams {
+   char connectionType[32];
+   bool isConnected;
+   bool volumeIsEnabled;
+   bool pollForClient;
+} JacktripParams;
+
+static JacktripParams connectionParams[TOTAL_SLOTS] = {
    {"s --clientname slot0", false, false, false},
    {"s --clientname slot1", false, false, false},
    {"s --clientname slot2", false, false, false}
@@ -353,7 +360,7 @@ void RjamApi_EcaSetup() // Ecasound setup/start
    printf("Chain operator status: %s\n", eci_last_string());
 }
 
-void RjamApi_KillSlot(int slot)
+void RjamApi_KillSlot(uint8_t slot)
 {
    char killcmd[255];
 
@@ -412,7 +419,7 @@ bool RjamApi_SetSampleRate(int newRate)
    return true;
 }
 
-void RjamApi_RouteSlot(int slot)
+void RjamApi_RouteSlot(uint8_t slot)
 {
    char ecaCommand[100];
    int ret;
@@ -445,7 +452,7 @@ void RjamApi_RouteSlot(int slot)
    }
 }
 
-void RjamApi_OpenSlot(int slot)
+void RjamApi_OpenSlot(uint8_t slot)
 {
    char jacktripCommand[128];
 
@@ -527,6 +534,116 @@ void RjamApi_SetSlotRole(uint8_t slot, uint8_t role)
    {
       RjamApi_OpenSlot(slot);
       RjamApi_RouteSlot(slot);
+   }
+}
+
+void RjamApi_CreateNewSession()
+{
+   strcpy(sessionInfo.name, "New Session");
+   sessionInfo.inputLevel = 50;
+   sessionInfo.outputLevel = 50;
+   sessionInfo.sampleRate = 2;
+   sessionInfo.monitorGain = 0;
+   sessionInfo.inputSelect = 0;
+   sessionInfo.micBoost = 0;
+
+   for (int i=0; i<TOTAL_SLOTS; i++) {
+      sprintf(connections[i].name, "User %d", i);
+      sprintf(connections[i].ipAddr, "127.0.0.%d", i);
+      connections[i].portOffset = i*10;
+      connections[i].role = 0;
+      connections[i].latency = 4;
+      connections[i].gain = 0;
+      connections[i].slot = i;
+   }
+}
+
+const char * RjamApi_GetConnectionType(uint8_t slot)
+{
+   if (slot < TOTAL_SLOTS)
+   {
+      return connectionParams[slot].connectionType;
+   }
+   else
+   {
+      return "";
+   }
+}
+
+bool RjamApi_isConnected(uint8_t slot)
+{
+   bool retval = false;
+
+   if (slot < TOTAL_SLOTS)
+   {
+      retval =  connectionParams[slot].isConnected;
+   }
+
+   return retval;
+}
+
+bool RjamApi_VolumeIsEnabled(uint8_t slot)
+{
+   bool retval = false;
+
+   if (slot < TOTAL_SLOTS)
+   {
+      retval =  connectionParams[slot].volumeIsEnabled;
+   }
+
+   return retval;
+}
+
+uint8_t RjamApi_GetSlotRole(uint8_t slot)
+{
+   uint8_t role = ClientRole;
+
+   if (slot < TOTAL_SLOTS)
+   {
+      role = connections[slot].role;
+   }
+
+   return role;
+}
+
+const char * RjamApi_GetSlotName(uint8_t slot)
+{
+   if (slot < TOTAL_SLOTS)
+   {
+      return connections[slot].name;
+   }
+   else
+   {
+      return "";
+   }
+}
+
+void RjamApi_SetSlotName(uint8_t slot, const char * pName)
+{
+   if (slot < TOTAL_SLOTS)
+   {
+      strncpy(connections[slot].name, pName, sizeof(connections[slot].name));
+      connections[slot].name[sizeof(connections[slot].name)-1];
+      TrimWhitespace(connections[slot].name);
+   }
+}
+
+int RjamApi_GetSlotPortOffset(uint8_t slot)
+{
+   int offset = 0;
+   if (slot < TOTAL_SLOTS)
+   {
+      offset = connections[slot].portOffset;
+   }
+
+   return offset;
+}
+
+void RjamApi_SetSlotPortOffset(uint8_t slot, int offset)
+{
+   if (slot < TOTAL_SLOTS)
+   {
+      connections[slot].portOffset = offset;
    }
 }
 

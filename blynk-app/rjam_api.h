@@ -19,24 +19,38 @@ enum {
 };
 
 void RjamApi_Initialize(SlotConnectedCallback);
-void RjamApi_SetOutputLevel(int level);
-void RjamApi_SetInputLevel(int level);
 void RjamApi_InitializeSoundCard();
-void RjamApi_InputSelect(int input);
-void RjamApi_ChangeMicGain();
-const char * RjamApi_GetMicGain();
-void RjamApi_SetSlotGain(int slot, int gain);
-void RjamApi_EcaSetup();
-void RjamApi_EcaConnect(uint8_t slot);
-bool RjamApi_SetSampleRate(int newRate);
+// Session info
+void RjamApi_CreateNewSession();
+void RjamApi_SaveAllSessionInfo();
+const char * RjamApi_GetSessionName();
+int RjamApi_GetAllSessionInfo(const char * pSessionName);
+const char * RjamApi_GetSessionName();
+void RjamApi_SetSessionName(const char * pName);
+int RjamApi_GetSessionOutputLevel();
+void RjamApi_SetSessionOutputLevel(int level);
+int RjamApi_GetSessionInputLevel();
+void RjamApi_SetSessionInputLevel(int level);
+int RjamApi_GetSessionInputSelect();
+void RjamApi_SetSessionInputSelect(int input);
+const char * RjamApi_GetSessionMicGain();
+void RjamApi_ChangeSessionMicGain();
+int RjamApi_GetSessionMonitorGain();
+void RjamApi_SetSessionMonitorGain(int gain);
+int RjamApi_GetSessionSampleRate();
+bool RjamApi_SetSessionSampleRate(int newRate);
+// Slot info
+void RjamApi_SetSlotGain(uint8_t slot, int gain);
+int RjamApi_GetSlotGain(uint8_t slot);
 void RjamApi_KillSlot(uint8_t slot);
 void RjamApi_RouteSlot(uint8_t slot);
 void RjamApi_OpenSlot(uint8_t slot);
-bool RjamApi_SetLatencyForSlot(uint8_t slot, uint8_t latency);
+bool RjamApi_SetSlotLatency(uint8_t slot, uint8_t latency);
+uint8_t RjamApi_GetSlotLatency(uint8_t slot);
 bool RjamApi_SetSlotIpAddress(uint8_t slot, const char *newIp);
+const char * RjamApi_GetSlotIpAddress(uint8_t slot);
 void RjamApi_SetSlotRole(uint8_t slot, uint8_t role);
 uint8_t RjamApi_GetSlotRole(uint8_t slot);
-void RjamApi_CreateNewSession();
 const char * RjamApi_GetConnectionType(uint8_t slot);
 bool RjamApi_isConnected(uint8_t slot);
 bool RjamApi_VolumeIsEnabled(uint8_t slot);
@@ -44,11 +58,7 @@ const char * RjamApi_GetSlotName(uint8_t slot);
 void RjamApi_SetSlotName(uint8_t slot, const char * pName);
 int RjamApi_GetSlotPortOffset(uint8_t slot);
 void RjamApi_SetSlotPortOffset(uint8_t slot, int offset);
-
-extern SessionInfo_T sessionInfo;
-extern ConnectionInfo_T connections[TOTAL_SLOTS];
-
-#define SAMPLE_RATE_COUNT 3
-extern const char *sampleRate[SAMPLE_RATE_COUNT];
+uint8_t RjamApi_GetSlotOfSlot(uint8_t slot);
+void RjamApi_SetSlotOfSlot(uint8_t slot, uint8_t dBslot);
 
 #endif // RJAM_API_H

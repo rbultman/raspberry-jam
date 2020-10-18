@@ -162,18 +162,18 @@ BLYNK_CONNECTED() {
 
 BLYNK_WRITE(OUTPUT_LEVEL) //Output Level Slider
 {
-   RjamApi_SetOutputLevel(param[0].asInt());
+   RjamApi_SetSessionOutputLevel(param[0].asInt());
 }
 
 BLYNK_WRITE(INPUT_LEVEL)  //Input Level Slider
 {
-   RjamApi_SetInputLevel(param[0].asInt());
+   RjamApi_SetSessionInputLevel(param[0].asInt());
 }
 
 static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
 {
    printf("Latency set for slot %d\r\n", slot);
-   if (RjamApi_SetLatencyForSlot(slot, latency))
+   if (RjamApi_SetSlotLatency(slot, latency))
    {
       if (RjamApi_GetSlotRole(slot) == ClientRole)
       {
@@ -184,17 +184,17 @@ static void SetLatencyForSlot(uint8_t slot, uint8_t latency)
 
 BLYNK_WRITE(SLOT1_LATENCY) // Connection 1 buffer adjustment
 {
-   RjamApi_SetLatencyForSlot(0, param.asInt() - 1);
+   SetLatencyForSlot(0, param.asInt() - 1);
 }
 
 BLYNK_WRITE(SLOT2_LATENCY) // Connection 2 buffer adjustment
 {
-   RjamApi_SetLatencyForSlot(1, param.asInt() - 1);
+   SetLatencyForSlot(1, param.asInt() - 1);
 }
 
 BLYNK_WRITE(SLOT3_LATENCY) // Connection 3 buffer adjustment
 {
-   RjamApi_SetLatencyForSlot(2, param.asInt() - 1);
+   SetLatencyForSlot(2, param.asInt() - 1);
 }
 
 void PopulateUiWithSessionInfo()
@@ -211,28 +211,28 @@ void PopulateUiWithSessionInfo()
       SetSlotRole(i, RjamApi_GetSlotRole(i));
 
       Blynk.setProperty(connectButton[i], "label", RjamApi_GetSlotName(i));
-      sprintf(ip_port, "%s:%d", connections[i].ipAddr, RjamApi_GetSlotPortOffset(i));
+      sprintf(ip_port, "%s:%d", RjamApi_GetSlotIpAddress(i), RjamApi_GetSlotPortOffset(i));
       Blynk.setProperty(roleButton[i], "label", ip_port);
-      Blynk.virtualWrite(latencySlider[i], connections[i].latency);
+      Blynk.virtualWrite(latencySlider[i], RjamApi_GetSlotLatency(i));
       Blynk.virtualWrite(roleButton[i], RjamApi_GetSlotRole(i));
-      Blynk.virtualWrite(gainSlider[i],connections[i].gain);
+      Blynk.virtualWrite(gainSlider[i], RjamApi_GetSlotGain(i));
       Blynk.virtualWrite(editButton[i], LOW);
       Blynk.syncVirtual(editButton[i]);
       sprintf(label, "Connection %d", i);
       Blynk.setProperty(editButton[i], "label", label);
    }
 
-   Blynk.virtualWrite(INPUT_LEVEL, sessionInfo.inputLevel);
+   Blynk.virtualWrite(INPUT_LEVEL, RjamApi_GetSessionInputLevel());
    Blynk.syncVirtual(INPUT_LEVEL);
-   Blynk.virtualWrite(OUTPUT_LEVEL, sessionInfo.outputLevel);
+   Blynk.virtualWrite(OUTPUT_LEVEL, RjamApi_GetSessionOutputLevel());
    Blynk.syncVirtual(OUTPUT_LEVEL);
-   Blynk.virtualWrite(SAMPLE_RATE, sessionInfo.sampleRate+1);
+   Blynk.virtualWrite(SAMPLE_RATE, RjamApi_GetSessionSampleRate()+1);
    Blynk.syncVirtual(SAMPLE_RATE);
-   Blynk.virtualWrite(MONITOR_GAIN_SLIDER, sessionInfo.monitorGain);
+   Blynk.virtualWrite(MONITOR_GAIN_SLIDER, RjamApi_GetSessionMonitorGain());
    Blynk.syncVirtual(MONITOR_GAIN_SLIDER);
-   Blynk.virtualWrite(INPUT_SELECT, sessionInfo.inputSelect);
+   Blynk.virtualWrite(INPUT_SELECT, RjamApi_GetSessionInputSelect());
    Blynk.syncVirtual(INPUT_SELECT);
-   Blynk.virtualWrite(MIC_GAIN, sessionInfo.micBoost);
+   Blynk.virtualWrite(MIC_GAIN, RjamApi_GetSessionMicGain());
    Blynk.syncVirtual(MIC_GAIN);
 }
 
@@ -244,7 +244,7 @@ void PopulateNewSession()
 
 void PopulateSlotInfoForSession(const char * sessionName)
 {
-   if(0 == GetAllSessionInfo(sessionName, &sessionInfo, connections))
+   if(0 == RjamApi_GetAllSessionInfo(sessionName))
    {
       PopulateUiWithSessionInfo();
    }
@@ -293,7 +293,7 @@ BLYNK_WRITE(SAMPLE_RATE) // Sampe Rate setting
    int8_t newSampleRate = param.asInt() - 1;
 
    printf("New sample rate: %d\r\n", newSampleRate);
-   if(!RjamApi_SetSampleRate(newSampleRate))
+   if(!RjamApi_SetSessionSampleRate(newSampleRate))
    {
       printf("Unknown sample rate selected: %d\r\n", newSampleRate);
       Blynk.virtualWrite(SAMPLE_RATE, 2);
@@ -449,15 +449,15 @@ BLYNK_WRITE(SLOT3_ROLE_BUTTON) //Connection 3 Connection Type
 
 BLYNK_WRITE(INPUT_SELECT) //Input Selection
 {
-   RjamApi_InputSelect(param[0].asInt());
+   RjamApi_SetSessionInputSelect(param[0].asInt());
 }
 
 BLYNK_WRITE(MIC_GAIN) //Mic Gain
 {
    if (param[0])
    {
-      RjamApi_ChangeMicGain();
-      Blynk.setProperty(MIC_GAIN,"offLabel", RjamApi_GetMicGain());
+      RjamApi_ChangeSessionMicGain();
+      Blynk.setProperty(MIC_GAIN,"offLabel", RjamApi_GetSessionMicGain());
    }
 }
 
@@ -466,8 +466,8 @@ void StopClientTest()   //Check to see if a client is in test mode, if so disabl
 	char msg[100];
 	if (slotBeingTested != -1)
 	{
-		sprintf(msg,"jack_disconnect %s:receive_1 %s:send_1",connections[slotBeingTested].ipAddr,connections[slotBeingTested].ipAddr);  //disable loopback
-		printf ("slotbeing edited: %d, jack_disconnect %s:receive_1 %s:send_1\r\n",slotBeingTested,connections[slotBeingTested].ipAddr,connections[slotBeingTested].ipAddr);
+		sprintf(msg,"jack_disconnect %s:receive_1 %s:send_1",RjamApi_GetSlotIpAddress(slotBeingTested),RjamApi_GetSlotIpAddress(slotBeingTested));  //disable loopback
+		printf ("slotbeing edited: %d, jack_disconnect %s:receive_1 %s:send_1\r\n",slotBeingTested,RjamApi_GetSlotIpAddress(slotBeingTested),RjamApi_GetSlotIpAddress(slotBeingTested));
 		system(msg);
 		Blynk.syncVirtual(gainSlider[slotBeingTested]);  // Set gain back to value from the slider
 		slotBeingTested = -1;
@@ -556,8 +556,8 @@ void LatencyTest () // Find latency, report in the app
             Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX,msg);
             Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX,"Toggle Test to resume");
             slotBeingTested = slotBeingEdited;
-            sprintf(msg,"jack_connect %s:receive_1 %s:send_1",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);  //establish loopback
-            printf ("jack_connect %s:receive_1 %s:send_1\r\n",connections[slotBeingEdited].ipAddr,connections[slotBeingEdited].ipAddr);
+            sprintf(msg,"jack_connect %s:receive_1 %s:send_1",RjamApi_GetSlotIpAddress(slotBeingEdited),RjamApi_GetSlotIpAddress(slotBeingEdited));  //establish loopback
+            printf ("jack_connect %s:receive_1 %s:send_1\r\n",RjamApi_GetSlotIpAddress(slotBeingEdited),RjamApi_GetSlotIpAddress(slotBeingEdited));
             system(msg);
          }
       }
@@ -626,18 +626,16 @@ BLYNK_WRITE(RIGHT_EDIT_FIELD_TEXT_BOX) // Right edit field
       p = strtok(NULL, ":");
       if (p == NULL) return;
       RjamApi_SetSlotPortOffset(slotBeingEdited, strtol(p, NULL, 10));
-      connections[slotBeingEdited].slot = slotBeingEdited;
+      RjamApi_SetSlotOfSlot(slotBeingEdited, slotBeingEdited);
 
-      sprintf(buf, "%s:%d", connections[slotBeingEdited].ipAddr, RjamApi_GetSlotPortOffset(slotBeingEdited));
+      sprintf(buf, "%s:%d", RjamApi_GetSlotIpAddress(slotBeingEdited), RjamApi_GetSlotPortOffset(slotBeingEdited));
 
       Blynk.setProperty(roleButton[slotBeingEdited], "label", buf);
    } else if (editMode == EditMode_Session) {
-      // get it
-      strcpy(sessionInfo.name, param[0].asStr());
-      TrimWhitespace(sessionInfo.name);
-
+      // save sesison name
+      RjamApi_SetSessionName(param[0].asStr());
       printf("Session name is now: \r\n");
-      printf("<%s>\r\n", sessionInfo.name);
+      printf("<%s>\r\n", RjamApi_GetSessionName());
    }
 }
 
@@ -677,7 +675,7 @@ static void EditButtonClicked(int slot, int state)
          Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, RjamApi_GetSlotName(slot));										  //Seed the data for the left edit field
 
          Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "IP_ADRESS:Port_Offset");                     //Populate the label for the right edit field
-         sprintf(msg, "%s:%d", connections[slot].ipAddr, RjamApi_GetSlotPortOffset(i));
+         sprintf(msg, "%s:%d", RjamApi_GetSlotIpAddress(slot), RjamApi_GetSlotPortOffset(i));
          Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, msg);                              //Seed the data for the right edit field
       }
    }
@@ -706,7 +704,7 @@ BLYNK_WRITE(SLOT3_EDIT_BUTTON) //Connection 1 Edit button
 
 BLYNK_WRITE(MONITOR_GAIN_SLIDER)  // Monitor Gain slider
 {
-   RjamApi_SetSlotGain(-1, param[0].asInt());
+   RjamApi_SetSessionMonitorGain(param[0].asInt());
 }
 
 bool longPressDetected = false;
@@ -724,12 +722,12 @@ void EnterDeleteSessionState(void *notused)
          Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, "Tap Session to abort");
 
          Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "Hold Session to delete");
-         Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, sessionInfo.name);
+         Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, RjamApi_GetSessionName());
          break;
 
       case EditMode_DeleteSession:
          ClearEditBoxes();
-         DeleteSessionInfo(sessionInfo.name);
+         DeleteSessionInfo(RjamApi_GetSessionName());
          PopulateSessionDropDown();
          Blynk.virtualWrite(SESSION_DROP_DOWN, 1);
          Blynk.syncVirtual(SESSION_DROP_DOWN);
@@ -752,9 +750,9 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
       }
 
       if (editMode == EditMode_Session) {
-         SaveAllSessionInfo(&sessionInfo, connections);
+         RjamApi_SaveAllSessionInfo();
 
-         strcpy(buf, sessionInfo.name);
+         strcpy(buf, RjamApi_GetSessionName());
 
          // reset edit info
          Blynk.virtualWrite(SESSION_SAVE_BUTTON, LOW);
@@ -784,7 +782,7 @@ BLYNK_WRITE(SESSION_SAVE_BUTTON)
          Blynk.virtualWrite(LEFT_EDIT_FIELD_TEXT_BOX, "Edit name, tap Session");
 
          Blynk.setProperty(RIGHT_EDIT_FIELD_TEXT_BOX, "label", "Session Name");
-         Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, sessionInfo.name);
+         Blynk.virtualWrite(RIGHT_EDIT_FIELD_TEXT_BOX, RjamApi_GetSessionName());
       }
    }
    else

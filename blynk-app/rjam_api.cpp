@@ -12,6 +12,7 @@
 #include "settings.h"
 #include "utility.h"
 #include "rjam_api.h"
+#include "session_db.h"
 #include "fe-pi-def.h"
 #include "audio-injector-def.h"
 #include "HIFI_DAC_ADC_DEF.h"
@@ -19,13 +20,14 @@
 
 #define ECA_CHANNEL_OFFSET 2
 
-SessionInfo_T sessionInfo;
-ConnectionInfo_T connections[TOTAL_SLOTS];
-const char *sampleRate[SAMPLE_RATE_COUNT] = {
+static SessionInfo_T sessionInfo;
+static ConnectionInfo_T connections[TOTAL_SLOTS];
+static const char *sampleRate[] = {
    "44100",
    "48000",
    "96000",
 };
+#define SAMPLE_RATE_COUNT (sizeof(sampleRate)/sizeof(char *))
 
 typedef struct JacktripParams {
    char connectionType[32];
@@ -64,7 +66,9 @@ static FePi fePiCard;
 static AudioInjector audioInjectorCard;
 static HifiberryDacPlusAdc hifiberryDacPlusAdc;
 
-void StopTimerIfConnectionsResolved();
+static void StopTimerIfConnectionsResolved();
+static void RjamApi_EcaSetup();
+static void RjamApi_EcaConnect(uint8_t slot);
 
 void SlotsConnectedTimerExpired(void *pIgnored)
 {
@@ -134,7 +138,12 @@ void RjamApi_InitializeSoundCard()
    }
 }
 
-void RjamApi_SetOutputLevel(int level)
+int RjamApi_GetSessionOutputLevel()
+{
+   return sessionInfo.outputLevel;
+}
+
+void RjamApi_SetSessionOutputLevel(int level)
 {
    char mixCommand[100];
 
@@ -155,7 +164,13 @@ void RjamApi_SetOutputLevel(int level)
    }
 }
 
-void RjamApi_SetInputLevel(int level)
+
+int RjamApi_GetSessionInputLevel()
+{
+   return sessionInfo.inputLevel;
+}
+
+void RjamApi_SetSessionInputLevel(int level)
 {
    char mixCommand[100];
    
@@ -176,7 +191,12 @@ void RjamApi_SetInputLevel(int level)
    }
 }
 
-void RjamApi_InputSelect(int input)
+int RjamApi_GetSessionInputSelect()
+{
+   return sessionInfo.inputSelect;
+}
+
+void RjamApi_SetSessionInputSelect(int input)
 {
    if (soundcard == NULL)
    {
@@ -203,7 +223,7 @@ void RjamApi_InputSelect(int input)
    }
 }
 
-void RjamApi_ChangeMicGain()
+void RjamApi_ChangeSessionMicGain()
 {
    char mixCommand[100];
 
@@ -227,26 +247,24 @@ void RjamApi_ChangeMicGain()
    }
 }
 
-const char * RjamApi_GetMicGain()
+const char * RjamApi_GetSessionMicGain()
 {
    return soundcard->micGainText[sessionInfo.micBoost];
 }
 
-void RjamApi_SetSlotGain(int slot, int gain)
+void RjamApi_SetSlotGain(uint8_t slot, int gain)
 {
    char ecaCommand[100] = "c-select self";
 
-   if (slot < 0)
+   if (slot >= TOTAL_SLOTS)
    {
-      printf("Gain changed for monitor\r\n");
-      sessionInfo.monitorGain = gain;
+      puts("ERROR: slot out of range.");
+      return;
    }
-   else
-   {
-      printf("Gain changed for slot %d\r\n", slot);
-      sprintf(ecaCommand, "c-select slot%d", slot);
-      connections[slot].gain = gain;
-   }
+
+   printf("Gain changed for slot %d\r\n", slot);
+   sprintf(ecaCommand, "c-select slot%d", slot);
+   connections[slot].gain = gain;
    eci_command(ecaCommand);
 
    sprintf(ecaCommand,"cop-set 1,1,%d",gain);
@@ -254,7 +272,19 @@ void RjamApi_SetSlotGain(int slot, int gain)
    eci_command(ecaCommand);
 }
 
-void RjamApi_EcaConnect(uint8_t slot)   //Sets up a chain in Ecasound with an input/output and gain control for a slot
+int RjamApi_GetSlotGain(uint8_t slot)
+{
+   if (slot < TOTAL_SLOTS)
+   {
+      return connections[slot].gain;
+   }
+   else
+   {
+      return -255;
+   }
+}
+
+static void RjamApi_EcaConnect(uint8_t slot)   //Sets up a chain in Ecasound with an input/output and gain control for a slot
 {
    char ecaCommand[100];
 
@@ -377,7 +407,7 @@ void RjamApi_KillSlot(uint8_t slot)
    sleep_millis(250);
 }
 
-void StopTimerIfConnectionsResolved()
+static void StopTimerIfConnectionsResolved()
 {
 	int i;
 	bool stopTimer = true;
@@ -392,7 +422,12 @@ void StopTimerIfConnectionsResolved()
 	}
 }
 
-bool RjamApi_SetSampleRate(int newRate)
+int RjamApi_GetSessionSampleRate()
+{
+   return sessionInfo.sampleRate;
+}
+
+bool RjamApi_SetSessionSampleRate(int newRate)
 {
    char jackCommand[128] = "jackd";
 
@@ -469,9 +504,15 @@ void RjamApi_OpenSlot(uint8_t slot)
    connectionParams[slot].isConnected = true;
 }
 
-bool RjamApi_SetLatencyForSlot(uint8_t slot, uint8_t latency)
+bool RjamApi_SetSlotLatency(uint8_t slot, uint8_t latency)
 {
    printf("Latency set for slot %d\r\n", slot);
+
+   if (slot >= TOTAL_SLOTS)
+   {
+      puts("ERROR: slot out of range.");
+      return false;
+   }
 
    if (latency >= BUFFER_SIZE_COUNT) {
       printf("Buffer size index out of range.\r\n");
@@ -490,10 +531,27 @@ bool RjamApi_SetLatencyForSlot(uint8_t slot, uint8_t latency)
    return false;
 }
 
+uint8_t RjamApi_GetSlotLatency(uint8_t slot)
+{
+   if (slot < TOTAL_SLOTS)
+   {
+      return connections[slot].latency;
+   }
+   else
+   {
+      return 0;
+   }
+}
+
 bool RjamApi_SetSlotIpAddress(uint8_t slot, const char *newIp) 
 {
    int ipCheck = 1;
    bool retval = false;
+
+   if (slot >= TOTAL_SLOTS)
+   {
+      puts("ERROR: Slot number out of range.");
+   }
 
    printf("New IP address requested for slot: %s\n", newIp);
    ipCheck=checkIpFormat(newIp);
@@ -508,6 +566,18 @@ bool RjamApi_SetSlotIpAddress(uint8_t slot, const char *newIp)
    }
 
    return retval;
+}
+
+const char * RjamApi_GetSlotIpAddress(uint8_t slot)
+{
+   if (slot < TOTAL_SLOTS)
+   {
+      return connections[slot].ipAddr;
+   }
+   else
+   {
+      return "";
+   }
 }
 
 void RjamApi_SetSlotRole(uint8_t slot, uint8_t role)
@@ -645,5 +715,64 @@ void RjamApi_SetSlotPortOffset(uint8_t slot, int offset)
    {
       connections[slot].portOffset = offset;
    }
+}
+
+uint8_t RjamApi_GetSlotOfSlot(uint8_t slot)
+{
+   if(slot < TOTAL_SLOTS)
+   {
+      return connections[slot].slot;
+   }
+   else
+   {
+      return 0;
+   }
+}
+
+void RjamApi_SetSlotOfSlot(uint8_t slot, uint8_t dbSlot)
+{
+   if (slot < TOTAL_SLOTS && dbSlot < TOTAL_SLOTS)
+   {
+      connections[slot].slot = dbSlot;
+   }
+}
+
+void RjamApi_SaveAllSessionInfo()
+{
+   SaveAllSessionInfo(&sessionInfo, connections);
+}
+
+int RjamApi_GetAllSessionInfo(const char * pSessionName)
+{
+   return GetAllSessionInfo(pSessionName, &sessionInfo, connections);
+}
+
+const char * RjamApi_GetSessionName()
+{
+   return sessionInfo.name;
+}
+
+void RjamApi_SetSessionName(const char * pName)
+{
+   strcpy(sessionInfo.name, pName);
+   TrimWhitespace(sessionInfo.name);
+}
+
+int RjamApi_GetSessionMonitorGain()
+{
+   return sessionInfo.monitorGain;
+}
+
+void RjamApi_SetSessionMonitorGain(int gain)
+{
+   char ecaCommand[100] = "c-select self";
+
+   printf("Gain changed for monitor\r\n");
+   sessionInfo.monitorGain = gain;
+   eci_command(ecaCommand);
+
+   sprintf(ecaCommand,"cop-set 1,1,%d",gain);
+   printf("Gain: %s\n",ecaCommand);
+   eci_command(ecaCommand);
 }
 
